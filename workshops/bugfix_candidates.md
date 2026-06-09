@@ -84,8 +84,99 @@ All PRs were merged into v1.23.0, but no linked GitHub issue was found.
 | 22 | Filter reviews in memory instead of database | [#33106](https://github.com/go-gitea/gitea/pull/33106) | — | — | 4 | +53 -39 |
 | 23 | render plain text file if the LFS object doesn't exist | [#31812](https://github.com/go-gitea/gitea/pull/31812) | bug | — | 7 | +18 -5 |
 
-## Issue #10
+---
 
-## Issue #17
+## W2 Shortlist Analysis
 
-##
+Four candidates analyzed in depth for the Bug Fix workshop (W2). Each evaluated across 5 criteria on a 1-5 scale.
+
+### Bug #20: Fix issue comment number
+
+- **PR**: [#30556](https://github.com/go-gitea/gitea/pull/30556) | **Issue**: [#22419](https://github.com/go-gitea/gitea/issues/22419)
+- **Files**: 5 | **Lines**: +89/-19
+- **Bug**: Source code line comments (`CommentTypeReview`) not counted in PR page's comment number. Only `CommentTypeComment` was counted; review comments were missed.
+- **Fix approach**: Added `CountedAsConversation()` method, `ConversationCountedCommentType()` list, centralized `UpdateIssueNumComments()` using a subquery builder. Also refactored `repoStatsCheck` from raw SQL `map[string][]byte` to typed `[]int64`.
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Domain complexity | 4/5 | PR comment counting — universally understood, but involves ORM builder patterns |
+| Reproducibility | 5/5 | Create a PR, add a code review comment, observe count mismatch |
+| TDD potential | 5/5 | Write test verifying `NumComments` includes both comment types |
+| Systematic-debugging fit | 4/5 | Multi-step: observe wrong count → trace comment types → find missing type |
+| Workshop suitability | **5/5** | Counting logic bug, clear investigation path, good test-first approach |
+
+### Bug #2: Star/Watch state inconsistency
+
+- **PR**: [#32570](https://github.com/go-gitea/gitea/pull/32570) | **Issue**: [#32561](https://github.com/go-gitea/gitea/issues/32561)
+- **Files**: 3 | **Lines**: +14/-4
+- **Bug**: After clicking Star/Unstar or Watch/Unwatch, the user cards list doesn't update — stale UI.
+- **Fix approach**: Added `HX-Trigger: refreshUserCards` response header in `Action()`, wired HTMX auto-refresh on `user_cards.tmpl` via `hx-trigger`/`hx-get`/`hx-swap`. Removed unused `PageIsWatchers`/`PageIsStargazers` data fields.
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Domain complexity | 2/5 | Very simple — HTMX trigger pattern |
+| Reproducibility | 5/5 | Click star button on watchers page, observe list doesn't refresh |
+| TDD potential | 2/5 | UI behavior, hard to unit test; requires integration/E2E test |
+| Systematic-debugging fit | 3/5 | Traces from button click → API → response headers → HTMX, but fix is only 3 lines |
+| Workshop suitability | **3/5** | Relatable but too simple for 2.5h; low TDD potential |
+
+### Bug #10: Fix markdown preview $$ support
+
+- **PR**: [#31514](https://github.com/go-gitea/gitea/pull/31514) | **Issue**: [#31481](https://github.com/go-gitea/gitea/issues/31481)
+- **Files**: 6 (1 new) | **Lines**: +79/-6
+- **Bug**: `$$A + B$$ test` — text after inline `$$` block gets swallowed. Block parser greedily matched `$$...$$` even when followed by text, and no inline `$$` parser existed.
+- **Fix approach**: Added guard in `block_parser.go` to reject `$$...$$text` (not a true block). Created new `InlineBlock` AST node type, new `defaultDualDollarParser` with higher priority (502) than single-dollar (503), renderer adds `display` class for inline-block math.
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Domain complexity | 3/5 | Markdown parser internals — goldmark AST/visitor pattern, moderate learning curve |
+| Reproducibility | 5/5 | Type `$$a$$ test` in markdown preview, observe text disappears |
+| TDD potential | 5/5 | Perfect: test cases are exact string pairs (`"$$a$$ test"` → expected HTML) |
+| Systematic-debugging fit | 4/5 | Trace from markdown input → block parser → inline parser → renderer |
+| Workshop suitability | **4/5** | Excellent TDD story, but parser domain may need scaffolding for newcomers |
+
+### Bug #17: Fix bleve fuzziness search
+
+- **PR**: [#33078](https://github.com/go-gitea/gitea/pull/33078) | **Issue**: [#31565](https://github.com/go-gitea/gitea/issues/31565)
+- **Files**: 11 (1 new) | **Lines**: +83/-52
+- **Bug**: Bleve search engine's fuzzy matching causes performance problems — fuzziness too aggressive by default.
+- **Fix approach**: Added configurable `TYPE_BLEVE_MAX_FUZZINESS` setting (default 0 = disabled). Extracted `PrepareCodeSearch()` helper to deduplicate 3 identical search handlers. Also fixed indexer queue to not re-queue failed items.
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Domain complexity | 3/5 | Full-text search / Bleve — moderately specialized |
+| Reproducibility | 3/5 | Needs indexer setup, performance issue not always visible |
+| TDD potential | 3/5 | Existing fuzziness tests can be extended, but core fix is a config change |
+| Systematic-debugging fit | 3/5 | More of a performance/config fix than classic logic bug; also bundled with refactoring |
+| Workshop suitability | **3/5** | Too many files, fix is small but surrounded by refactoring; harder to isolate as "bug" exercise |
+
+### Bug #1: Fix incomplete Actions status aggregations
+
+- **PR**: [#32859](https://github.com/go-gitea/gitea/pull/32859) | **Issue**: [#32857](https://github.com/go-gitea/gitea/issues/32857)
+- **Files**: 6 (1 new test) | **Lines**: +106/-38
+- **Bug**: `AggregateJobStatus()` only handled 4 states (Failure, Success, Waiting, Running) but ignored Cancelled, Blocked, and Skipped. For example, all jobs skipped → showed "Running" instead of "Skipped"; cancelled jobs → showed "Failure" instead of "Cancelled".
+- **Root cause**: Boolean-based logic (`allDone`, `allWaiting`, `hasFailure`) couldn't represent all status combinations. Cancelled was lumped with Failure, Skipped/Blocked were invisible.
+- **Fix approach**:
+  1. **Core** (`models/actions/run_job.go`): Replaced with flag-based `switch` — `allSuccessOrSkipped`, `hasFailure`, `hasCancelled`, `hasSkipped`, `hasWaiting`, `hasRunning`, `hasBlocked`. Priority: Success > Failure > Running > Waiting > Blocked > Cancelled > Skipped.
+  2. **Test** (NEW: `run_job_status_test.go`, 64 lines): Comprehensive table-driven tests covering all status combinations (21 cases).
+  3. **Frontend** (`ActionRunStatus.vue`, `status.tmpl`): Separated `cancelled` from `failure` with its own icon (octicon-stop vs octicon-x-circle-fill). Minor CSS cleanup.
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Domain complexity | 3/5 | CI/CD job status state machine — concepts familiar, but aggregation priority semantics need understanding |
+| Reproducibility | 4/5 | Issue provides demo repo. Create workflow with all-skipped jobs → observe wrong aggregate status |
+| TDD potential | 5/5 | Perfect — PR itself was written test-first: new 64-line test file with 21 table-driven cases |
+| Systematic-debugging fit | 5/5 | Classic state machine bug: observe wrong status → trace aggregation function → enumerate all states → find gaps → design priority |
+| Workshop suitability | **5/5** | State machine bug is a universal pattern; Go backend core is self-contained; frontend changes are separable and cosmetic |
+
+---
+
+## W2 Recommendation
+
+| Priority | Bug | Role | Rationale |
+|----------|-----|------|-----------|
+| **Primary** | **#1 Fix Actions status aggregation** | Main exercise | State machine bug — universal pattern, perfect TDD (21 test cases), clean Go-only core fix, excellent systematic-debugging (enumerate states → find gaps → design priority). Frontend changes separable. |
+| **Primary** | **#20 Fix issue comment number** | Alternative exercise | Counting logic bug, clear reproduction, excellent TDD. More "backend data" flavor vs #1's "state machine" flavor. Choose based on audience background. |
+| **Alternative** | **#10 Fix markdown $$ support** | Advanced option | Strong TDD story (string→HTML test cases), but parser internals need more scaffolding for newcomers. Good if audience has parser experience. |
+| **Supplement** | **#2 Star/Watch inconsistency** | Warm-up / demo | Quick reproduction for demonstrating systematic-debugging flow at session start. Too simple for full 2.5h. |
+| **Not recommended** | **#17 Bleve fuzziness** | Skip | More config/refactor than bug; 11 files too large; hard to isolate the "bug" from surrounding changes. |
