@@ -1,0 +1,31 @@
+schema: spec-driven-ears
+
+# Project context — shown to AI when creating artifacts.
+context: |
+  Project: Gitea — self-hosted Git service (go-gitea/gitea, v1.22.x branch)
+  Tech stack: Go backend, JavaScript/CSS frontend
+  Frontend: Fomantic UI (Semantic UI fork), Vue components, Go HTML templates
+  Database: XORM ORM, SQLite/MySQL/PostgreSQL, migrations in models/migrations/
+  Domain: Developer tooling — Git hosting, issue tracking, PRs, CI/CD (Actions), package registry, webhooks
+  Architecture — strict layered, dependencies flow downward:
+    cmd/       → CLI entry points
+    routers/   → HTTP handlers (routers/web/ for UI, routers/api/v1/ for REST API)
+    services/  → Business logic / orchestration
+    models/    → Data access, XORM models, DB migrations
+    modules/   → Shared libraries (must NOT import models/services/routers)
+  Key rules:
+    - modules/ must not import from models/, services/, or routers/
+    - API handlers need Swagger annotations (run make generate-swagger after changes)
+    - Go tests use models/unittest/ framework for DB-backed setup
+    - Backport-focused branch — avoid unnecessary refactors
+
+# Per-artifact rules (keyed by artifact ID: proposal, specs, design, tasks)
+rules:
+  proposal:
+    - Always include impact on routers/api or routers/web with specific file paths
+    - When proposing API changes, note that Swagger annotations are required
+  tasks:
+    - Each task should be completable in under 2 hours
+    - Reference relevant file paths from the Gitea codebase when possible
+    - When a task touches models/, include a subtask for updating XORM registration if adding new types
+    - When a task adds API endpoints, include a subtask for Swagger annotations and running make generate-swagger

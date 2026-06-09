@@ -1,0 +1,347 @@
+name: spec-driven-ears
+version: 1
+description: Spec-driven workflow using EARS notation for requirements — proposal → specs (EARS) → design → tasks
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Initial proposal document outlining the change
+    template: proposal.md
+    instruction: >
+      Create the proposal document that establishes WHY this change is needed.
+
+
+      Sections:
+
+      - **Why**: 1-2 sentences on the problem or opportunity. What problem does
+      this solve? Why now?
+
+      - **What Changes**: Bullet list of changes. Be specific about new
+      capabilities, modifications, or removals. Mark breaking changes with
+      **BREAKING**.
+
+      - **Capabilities**: Identify which specs will be created or modified:
+        - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<name>/spec.md`. Use kebab-case names (e.g., `user-auth`, `data-export`).
+        - **Modified Capabilities**: List existing capabilities whose REQUIREMENTS are changing. Only include if spec-level behavior changes (not just implementation details). Each needs a delta spec file. Check `openspec/specs/` for existing spec names. Leave empty if no requirement changes.
+      - **Impact**: Affected code, APIs, dependencies, or systems.
+
+
+      IMPORTANT: The Capabilities section is critical. It creates the contract
+      between
+
+      proposal and specs phases. Research existing specs before filling this in.
+
+      Each capability listed here will need a corresponding spec file.
+
+
+      Keep it concise (1-2 pages). Focus on the "why" not the "how" -
+
+      implementation details belong in design.md.
+
+
+      This is the foundation - specs, design, and tasks all build on this.
+    requires: []
+  - id: specs
+    generates: specs/**/*.md
+    description: Detailed specifications using EARS notation
+    template: spec.md
+    instruction: >
+      Create specification files that define WHAT the system should do using
+      EARS (Easy Approach to Requirements Syntax).
+
+
+      Create one spec file per capability listed in the proposal's Capabilities
+      section.
+
+      - New capabilities: use the exact kebab-case name from the proposal
+      (specs/<capability>/spec.md).
+
+      - Modified capabilities: use the existing spec folder name from
+      openspec/specs/<capability>/ when creating the delta spec at
+      specs/<capability>/spec.md.
+
+
+      Delta operations (use ## headers):
+
+      - **ADDED Requirements**: New capabilities
+
+      - **MODIFIED Requirements**: Changed behavior - MUST include full updated
+      content
+
+      - **REMOVED Requirements**: Deprecated features - MUST include **Reason**
+      and **Migration**
+
+      - **RENAMED Requirements**: Name changes only - use FROM:/TO: format
+
+
+      **Requirement ID System** — every requirement gets a structured ID:
+
+      Format: `<PREFIX>-<SPEC>-<NUMBER>`
+      - PREFIX: 2-4 letter domain abbreviation (e.g. TAG for tags, PR for
+      pull requests, ISSUE for issues)
+      - SPEC: 2-digit sequence number within domain
+      - NUMBER: 3-digit, assigned in hundred-level ranges per feature area
+        to reserve room for growth. Within each feature area, group by
+      pattern type:
+        - Feature Area 1: Ubiquitous 001-099, Event-Driven 101-199,
+      Unwanted 301-399, Complex 901-999
+        - Feature Area 2: Event-Driven 201-299, Unwanted 401-499, Complex
+      1001+
+        - Feature Area 3: Event-Driven 601-699, State-Driven 701-799
+      - Examples: TAG-01-001, TAG-01-101, TAG-01-301
+
+      Business Rules get their own ID series: `BR-NN-XXX`.
+
+
+      **EARS Grammar** — every requirement follows the immutable sequence:
+      `<optional preconditions> <optional trigger> the <system name> shall
+      <system response>.`
+      The `<system name>` references the computational actor (e.g. specific
+      service, class, API). The `<system response>` dictates the mandatory
+      execution or output. Complex boolean logic ("and/or") must be
+      partitioned into exclusive conditions for precise test coverage.
+
+
+      **Six EARS Patterns** — every requirement statement MUST use exactly
+      one:
+
+      1. **[Ubiquitous]** — Global properties, baseline constraints,
+      continuous services with no external stimulus.
+         Syntax: `The <system name> shall <system response>.`
+         Example: The system SHALL require a minimum tag name length of 1
+      character.
+
+      2. **[Event-Driven]** — Discrete API invocations, async message
+      receipts, UI interactions. Response mandated when and only when the
+      trigger is detected.
+         Syntax: `When <trigger>, the <system name> shall <system response>.`
+         Example: When the user submits a tag search query, the system SHALL
+      filter the tag list to matching results.
+
+      3. **[State-Driven]** — Modal behaviors, session states, runtime
+      environments. Response enforced for the duration the state evaluates
+      to true.
+         Syntax: `While <system state>, the <system name> shall <system
+      response>.`
+         Example: While the repository is archived, the system SHALL reject
+      all new tag creation.
+
+      4. **[Optional Feature]** — Feature flags, modular configs, SPLE
+      variability. Decouples variable logic from core codebase.
+         Syntax: `Where <feature is included>, the <system name> shall
+      <system response>.`
+         Example: Where tag protection rules are enabled, the system SHALL
+      prevent deletion of protected tags.
+
+      5. **[Unwanted Behaviour]** — Exception handling, input validation,
+      cybersecurity fault tolerance, data validation.
+         Syntax: `If <unwanted condition>, then the <system name> shall
+      <system response>.`
+         Example: If the tag name contains invalid characters, then the system
+      SHALL reject the tag and display an error message.
+
+      6. **[Complex]** — Synthesizes dense Boolean logic, fusing runtime
+      states with triggering events or exceptions.
+         Syntax: `<Multiple Conditions>, the <system name> shall <system
+      response>.`
+         Example: While the repository is in mirror mode, if a sync fails
+      three consecutive times, then the system SHALL disable automatic
+      syncing and notify the administrators.
+
+
+      **Document Structure** — organize each spec file as follows:
+
+      Within each delta section (## ADDED / ## MODIFIED / ## REMOVED),
+      group requirements by **feature area**, then by **pattern type**:
+
+      ```
+      ## ADDED Requirements
+
+      ### 1. Tag Search
+      **User Story:** As a repository admin, I want to search tags so that
+      I can quickly find specific releases.
+
+      #### Ubiquitous Requirements (Tag Search Constraints)
+      - **TAG-01-001:** `The system shall support tag name search on the
+      repository tags page.`
+      - **TAG-01-002:** `The system shall perform tag search as a
+      case-insensitive substring match.`
+
+      #### Event-Driven Requirements (Tag Search Workflow)
+      - **TAG-01-101:** `When the user types in the tag search input, the
+      system shall filter the tag list in real time.`
+      - **TAG-01-102:** `When the tag search query is cleared, the system
+      shall restore the full tag list.`
+
+      #### Unwanted Behaviour Requirements (Tag Search Errors)
+      - **TAG-01-301:** `If the search query contains SQL injection patterns,
+      then the system shall sanitize the input and perform the search safely.`
+
+      ---
+
+      ## Business Rules
+      - **BR-01-001:** Tag search applies only to the current repository
+      - **BR-01-002:** Search results respect the user's read access
+      permissions
+
+      ## Edge Cases & Error Handling
+      | Scenario | System Behavior |
+      |----------|----------------|
+      | Empty search query | Display full tag list |
+      | No matching tags | Display "No tags found" message |
+      | Special regex characters | Treat as literal substring |
+
+      ## Success Criteria
+      - Tag search responds within 200ms for repositories with up to 10,000
+      tags
+      - Search results match exactly the substring filter criteria
+      ```
+
+      **Format requirements:**
+
+      - Requirements are bullet items: `- **<ID>:** \`<EARS statement>\``
+      - NOT `### Requirement:` headers — use flat bullet lists grouped
+      under `####` pattern-type sub-headers
+      - `####` headers define pattern type groups within a feature area
+      - **CRITICAL**: `####` (4 hashtags) is used for pattern type
+      sub-headers. Using 3 hashtags will fail silently.
+      - Normative keyword: SHALL only. Never use should/may.
+      - Group related requirements under a `###` feature area heading
+      with a **User Story** providing persona context
+      - Separate each feature area with `---` horizontal rules
+
+
+      **Supplementary Sections** — include after requirements when applicable:
+
+      - **Business Rules** (`## Business Rules`): Cross-cutting invariants
+      and constraints that span multiple feature areas. Use `BR-NN-XXX` IDs.
+      - **Edge Cases & Error Handling** (`## Edge Cases & Error Handling`):
+      Table of boundary conditions with expected system behavior.
+      - **Success Criteria** (`## Success Criteria`): Measurable,
+      testable acceptance criteria (performance thresholds, coverage
+      requirements, etc.).
+
+
+      MODIFIED requirements workflow:
+
+      1. Locate the existing requirement in openspec/specs/<capability>/spec.md
+      2. Copy the ENTIRE feature area block (from `###` through all bullets)
+      3. Paste under `## MODIFIED Requirements` and edit to reflect new behavior
+      4. Preserve requirement IDs — only change the EARS statement content
+
+      Common pitfall: Using MODIFIED with partial content loses detail at
+      archive time.
+
+      If adding new concerns without changing existing behavior, use ADDED
+      instead.
+
+
+      Specs should be testable — each EARS requirement maps directly to a
+      test case. The ID system enables bidirectional traceability between
+      requirements, tests, and implementation.
+    requires:
+      - proposal
+  - id: design
+    generates: design.md
+    description: Technical design document with implementation details
+    template: design.md
+    instruction: >
+      Create the design document that explains HOW to implement the change.
+
+
+      When to include design.md (create only if any apply):
+
+      - Cross-cutting change (multiple services/modules) or new architectural
+      pattern
+
+      - New external dependency or significant data model changes
+
+      - Security, performance, or migration complexity
+
+      - Ambiguity that benefits from technical decisions before coding
+
+
+      Sections:
+
+      - **Context**: Background, current state, constraints, stakeholders
+
+      - **Goals / Non-Goals**: What this design achieves and explicitly excludes
+
+      - **Decisions**: Key technical choices with rationale (why X over Y?).
+      Include alternatives considered for each decision.
+
+      - **Risks / Trade-offs**: Known limitations, things that could go wrong.
+      Format: [Risk] → Mitigation
+
+      - **Migration Plan**: Steps to deploy, rollback strategy (if applicable)
+
+      - **Open Questions**: Outstanding decisions or unknowns to resolve
+
+
+      Focus on architecture and approach, not line-by-line implementation.
+
+      Reference the proposal for motivation and specs for requirements.
+
+
+      Good design docs explain the "why" behind technical decisions.
+    requires:
+      - proposal
+  - id: tasks
+    generates: tasks.md
+    description: Implementation checklist with trackable tasks
+    template: tasks.md
+    instruction: >
+      Create the task list that breaks down the implementation work.
+
+
+      **IMPORTANT: Follow the template below exactly.** The apply phase parses
+
+      checkbox format to track progress. Tasks not using `- [ ]` won't be
+      tracked.
+
+
+      Guidelines:
+
+      - Group related tasks under ## numbered headings
+
+      - Each task MUST be a checkbox: `- [ ] X.Y Task description`
+
+      - Tasks should be small enough to complete in one session
+
+      - Order tasks by dependency (what must be done first?)
+
+
+      Example:
+
+      ```
+
+      ## 1. Setup
+
+
+      - [ ] 1.1 Create new module structure
+
+      - [ ] 1.2 Add dependencies to package.json
+
+
+      ## 2. Core Implementation
+
+
+      - [ ] 2.1 Implement data export function
+
+      - [ ] 2.2 Add CSV formatting utilities
+
+      ```
+
+
+      Reference specs for what needs to be built, design for how to build it.
+
+      Each task should be verifiable - you know when it's done.
+    requires:
+      - specs
+      - design
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: |
+    Read context files, work through pending tasks, mark complete as you go.
+    Pause if you hit blockers or need clarification.
