@@ -51,6 +51,54 @@ All PRs were merged into v1.23.0, but no linked GitHub issue was found.
 | 9 | Support compression for Actions logs (base module) | [#31761](https://github.com/go-gitea/gitea/pull/31761) | Companion to #32013 which has issue #31801 |
 
 
+## Issue #2: Included tag search capabilities
+
+**PR [#32045](https://github.com/go-gitea/gitea/pull/32045)** · Issue [#31998](https://github.com/go-gitea/gitea/issues/31998) · 4 files · +33 -7
+
+### Feature Description
+
+为仓库的 Tags 页面添加搜索/过滤功能。用户可以在 `/{org}/{repo}/tags` 页面通过关键词搜索 tag 名称。与已有的 branches/commits 搜索功能保持一致的 UX 模式。
+
+### Affected Layers
+
+| Layer | Files | Key Changes |
+|---|---|---|
+| **models/** | 1 | `repo/release.go` +6 行（添加按关键词过滤 tag 的方法） |
+| **routers/web/** | 1 | `repo/release.go` +13/-3（接收 URL query 参数 `q`，传给 model 层） |
+| **templates/** | 1 | `tag/list.tmpl` +12/-4（搜索输入框 + 空结果提示 UI） |
+| **options/** | 1 | i18n +2 行（搜索框 placeholder 文案） |
+
+### Change Breakdown
+
+- **New files**: 0
+- **Modified files**: 4（每个文件改动 2-13 行）
+- **无新依赖、无 DB 变更、无 migration**
+
+### Difficulty: 1/5（最低，最适合入门）
+
+**Reasoning**:
+- 仅 4 个文件，总计 +33 行
+- 遵循已有模式（branches/commits 搜索功能的复制）
+- 无 DB 变更、无新依赖、无跨层复杂度
+- 核心逻辑：model 加一个过滤方法 → router 传参 → template 加搜索框
+- **30-45 分钟即可完成核心实现**
+
+### Workshop Risks
+
+- 几乎没有风险——改动极小，边界清晰
+- 唯一注意点：需确认 branches/commits 的搜索模式作为参考
+
+### Recommended Workshop Fit
+
+**W1（增加特性 / 正向 SDIE）— 最佳入门选择**
+
+与 #15 相比：
+- #2 更适合首次练习 SDIE 正向流程（改动小、成功快、信心建立）
+- #15 更适合有经验后的深入练习（改动多、涉及 YAML 解析、workflow 架构）
+- 建议 W1 提供两个选项：#2（入门）和 #15（进阶），学员根据进度自选
+
+---
+
 ## Issue #17: Support repo license
 
 **PR [#24872](https://github.com/go-gitea/gitea/pull/24872)** · Issue [#278](https://github.com/go-gitea/gitea/issues/278) · 47 files · +906 -22
@@ -221,9 +269,10 @@ All PRs were merged into v1.23.0, but no linked GitHub issue was found.
 
 | Feature | Difficulty | Workshop | 理由 |
 |---|---|---|---|
-| **#15** Actions workflow dispatch | 2/5 | **W1**（增加特性） | 最自包含、无跨层依赖、可增量实现，最适合首次正向 SDIE 练习 |
-| **#13** Issue time estimate | 3/5 | **W4**（综合实战） | 中等复杂度、跨 models/modules/routers/templates，适合综合运用四天所学 |
-| **#17** Support repo license | 4/5 | **拆分为课后任务** | 47 文件过多，不适合单次工作坊；可拆分核心链路为 W1 的扩展任务 |
+| **#2** Tag search | 1/5 | **W1 入门选项** | 4 文件 +33 行，最快速建立信心，30-45 分钟完成 |
+| **#15** Actions workflow dispatch | 2/5 | **W1 进阶选项** | 10 文件、高自包含、无 DB 变更，适合进度快的学员 |
+| **#13** Issue time estimate | 3/5 | **W4**（综合实战） | 21 文件跨多层，适合综合运用四天所学 |
+| **#17** Support repo license | 4/5 | **课后任务** | 47 文件过多，拆分核心链路为课后挑战 |
 
 ### Gap Analysis
 
