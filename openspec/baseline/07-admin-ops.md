@@ -87,30 +87,16 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 **User Story:** As an administrator, I want to configure external authentication sources so that users can authenticate against LDAP, SMTP, OAuth2, and other providers.
 
-### Ubiquitous Requirements (Auth Source Properties)
+### Ubiquitous Requirements (Admin Interface)
 
-- **ADM-04-001:** `The system shall support the following authentication source types: LDAP (BindDN), LDAP (simple auth), SMTP, OAuth2, PAM, SPNEGO/SSPI, and FreeIPA.`
+- **ADM-04-001:** `The system shall expose auth source CRUD operations in the admin panel (see AUTH-06 for supported source types, lifecycle behavior, optional features, and error handling).`
 - **ADM-04-002:** `The system shall store authentication source configurations with activation state and display order.`
 - **ADM-04-003:** `The system shall allow TLS configuration per authentication source.`
 
-### Event-Driven Requirements (Auth Source CRUD)
+### Event-Driven Requirements (Admin Operations)
 
-- **ADM-04-101:** `When an admin creates a new authentication source, the system shall make it available for login immediately upon activation.`
-- **ADM-04-102:** `When an admin updates an authentication source, the system shall persist the changes and apply them to subsequent login attempts.`
-- **ADM-04-103:** `When an admin deletes an authentication source, the system shall remove it and prevent further login through that source.`
-- **ADM-04-104:** `When an admin triggers an LDAP sync, the system shall synchronize user data from the LDAP directory to local accounts.`
-
-### Optional Feature Requirements (Auth Source Features)
-
-- **ADM-04-201:** `Where an LDAP source is configured with group-to-team mapping, the system shall assign users to teams based on their LDAP group membership.`
-- **ADM-04-202:** `Where an LDAP source is configured with admin group filtering, the system shall grant admin privileges to users in the specified groups.`
-- **ADM-04-203:** `Where an LDAP source is configured with restricted group filtering, the system shall mark users in those groups as restricted.`
-- **ADM-04-204:** `Where an authentication source is configured to skip local 2FA, the system shall bypass 2FA for users authenticating through that source.`
-
-### Unwanted Behaviour Requirements (Auth Source Errors)
-
-- **ADM-04-301:** `If an external authentication source is unreachable during login, then the system shall reject login attempts against that source with an error.`
-- **ADM-04-302:** `If an LDAP sync operation fails, then the system shall log the error and continue with the existing user data.`
+- **ADM-04-101:** `When an admin triggers an LDAP sync from the admin panel, the system shall synchronize user data from the LDAP directory to local accounts.`
+- **ADM-04-102:** `When an admin reorders authentication sources, the system shall update the display order and login precedence.`
 
 ---
 
@@ -182,7 +168,7 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ### Ubiquitous Requirements (Metrics Properties)
 
-- **ADM-07-001:** `The system shall expose a Prometheus-compatible metrics endpoint at /api/v1/metrics.`
+- **ADM-07-001:** `The system shall expose a Prometheus-compatible metrics endpoint at /metrics.`
 - **ADM-07-002:** `The system shall expose build info metrics including goarch, goos, goversion, and version.`
 - **ADM-07-003:** `The system shall expose aggregate count metrics for repositories, users, organizations, issues, labels, milestones, mirrors, releases, teams, webhooks, and hooks.`
 
@@ -348,7 +334,7 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 - **BR-07-010:** PProf endpoints are disabled by default and must be explicitly enabled via PprofEnabled
 - **BR-07-011:** Backup archives contain all data by default; individual categories are excluded via flags
 - **BR-07-012:** Log levels are hierarchical: TRACE < DEBUG < INFO < WARN < ERROR < FATAL
-- **BR-07-013:** Authentication source order determines precedence when multiple sources match a user
+- **BR-07-013:** Authentication source order determines precedence when multiple sources match a user (see AUTH-06 for source types and features)
 - **BR-07-014:** Ghost users are system accounts used for attribution preservation after user deletion
 
 ## Edge Cases & Error Handling

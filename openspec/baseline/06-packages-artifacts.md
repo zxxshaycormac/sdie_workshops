@@ -174,7 +174,6 @@ Baseline specification of Gitea's package registry, container registry, release 
 - **PKG-05-103:** `When a user pushes commits referencing LFS objects, the system shall automatically associate the LFS objects with the target repository.`
 - **PKG-05-104:** `When a user creates an LFS lock on a file, the system shall record the lock with the owner and file path.`
 - **PKG-05-105:** `When a user requests to unlock an LFS lock, the system shall remove the lock, allowing other users to modify the file.`
-- **PKG-05-106:** `When a repository is migrated, the system shall transfer associated LFS objects to the new repository.`
 
 ### State-Driven Requirements (LFS Locking)
 
@@ -233,7 +232,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 
 ### Ubiquitous Requirements (Storage Architecture)
 
-- **PKG-07-001:** `The system shall support three storage backend types: local filesystem, MinIO/S3 (AWS-compatible), and Azure Blob Storage.`
+- **PKG-07-001:** `The system shall support two storage backend types: local filesystem and MinIO/S3 (AWS-compatible).`
 - **PKG-07-002:** `The system shall allow independent storage configuration for each of the following types: attachments, LFS, packages, avatars, repo-avatars, repo-archive, actions_log, and actions_artifact.`
 - **PKG-07-003:** `The system shall apply a default storage configuration as fallback for any storage type without explicit configuration.`
 - **PKG-07-004:** `The system shall configure each storage type via [storage.{type}] INI sections with backend-specific parameters.`
@@ -246,10 +245,9 @@ Baseline specification of Gitea's package registry, container registry, release 
 
 ### Optional Feature Requirements (Backend Capabilities)
 
-- **PKG-07-201:** `Where SERVE_DIRECT is enabled for a MinIO or Azure backend, the system shall generate pre-signed direct download URLs that bypass the Gitea server.`
+- **PKG-07-201:** `Where SERVE_DIRECT is enabled for a MinIO backend, the system shall generate pre-signed direct download URLs that bypass the Gitea server.`
 - **PKG-07-202:** `Where MinIO/S3 storage is configured, the system shall connect using the specified endpoint, access key, secret key, bucket, and region.`
-- **PKG-07-203:** `Where Azure Blob storage is configured, the system shall connect using the specified endpoint, account name, account key, and container.`
-- **PKG-07-204:** `Where local storage is configured, the system shall store files at the specified filesystem path.`
+- **PKG-07-203:** `Where local storage is configured, the system shall store files at the specified filesystem path.`
 
 ### Unwanted Behaviour Requirements (Storage Errors)
 
@@ -272,7 +270,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 - **BR-06-009:** Attachment UUIDs are globally unique and serve as the primary download identifier
 - **BR-06-010:** Default attachment size limit is 4MB; default file count limit per upload is 5
 - **BR-06-011:** Each storage type (attachments, LFS, packages, etc.) can use a different backend independently
-- **BR-06-012:** SERVE_DIRECT applies only to MinIO and Azure backends, not to local storage
+- **BR-06-012:** SERVE_DIRECT applies only to MinIO backends, not to local storage
 - **BR-06-013:** Package authentication requires either a personal access token with read:package/write:package scopes or basic auth credentials
 
 ## Edge Cases & Error Handling

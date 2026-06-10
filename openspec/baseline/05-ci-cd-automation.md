@@ -64,7 +64,7 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 
 ### Ubiquitous Requirements (Webhook Properties)
 
-- **CI-02-001:** `The system shall support the following webhook payload formats: Gitea (native), Gogs, Slack, Discord, Dingtalk, Telegram, Microsoft Teams, Feishu (Lark), Matrix, WeChat Work, Packagist, and General (custom).`
+- **CI-02-001:** `The system shall support the following webhook payload formats: Gitea (native), Gogs, Slack, Discord, Dingtalk, Telegram, Microsoft Teams, Feishu (Lark), Matrix, WeChat Work, and Packagist.`
 - **CI-02-002:** `The system shall track delivery status for each webhook invocation with success or failure indication.`
 - **CI-02-003:** `The system shall store both request and response data for each webhook delivery.`
 - **CI-02-004:** `The system shall support webhook configuration at three scopes: system (admin), organization, and repository.`

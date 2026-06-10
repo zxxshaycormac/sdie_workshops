@@ -52,18 +52,17 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 ### Ubiquitous Requirements (Protocol Support)
 
-- **REPO-02-001:** `The system shall support the Smart HTTP protocol for Git operations (git-upload-pack and git-receive-pack).`
-- **REPO-02-002:** `The system shall support SSH protocol for Git operations via a built-in SSH server.`
-- **REPO-02-003:** `The system shall support HTTP basic authentication and token authentication for Git operations over HTTP.`
-- **REPO-02-004:** `The system shall provide archive downloads in zip and tar.gz formats for any branch, tag, or commit.`
-- **REPO-02-005:** `The system shall provide raw file downloads for individual files in the repository.`
-- **REPO-02-006:** `The system shall generate clone URLs for both HTTP and SSH protocols on the repository page.`
+- **REPO-02-001:** `The system shall support Git operations over HTTP and SSH protocols (see INT-05 for SSH server details and INT-12 for Smart HTTP protocol details).`
+- **REPO-02-002:** `The system shall support HTTP basic authentication and token authentication for Git operations over HTTP.`
+- **REPO-02-003:** `The system shall provide archive downloads in zip and tar.gz formats for any branch, tag, or commit.`
+- **REPO-02-004:** `The system shall provide raw file downloads for individual files in the repository.`
+- **REPO-02-005:** `The system shall generate clone URLs for both HTTP and SSH protocols on the repository page.`
 
 ### Event-Driven Requirements (Git Protocol Workflow)
 
-- **REPO-02-101:** `When a client initiates a git clone over HTTP, the system shall serve the repository via the Smart HTTP protocol.`
+- **REPO-02-101:** `When a client initiates a git clone over HTTP, the system shall serve the repository via the Smart HTTP protocol (see INT-12 for full protocol behavior).`
 - **REPO-02-102:** `When a client initiates a git push over HTTP, the system shall authenticate the user and accept the push if authorized.`
-- **REPO-02-103:** `When a client initiates a Git operation over SSH, the system shall authenticate the user via their registered SSH key.`
+- **REPO-02-103:** `When a client initiates a Git operation over SSH, the system shall authenticate the user via their registered SSH key (see INT-05 for SSH server behavior).`
 - **REPO-02-104:** `When a user requests an archive download, the system shall generate and serve the archive for the specified ref.`
 - **REPO-02-105:** `When a user with 2FA enabled attempts HTTP Git operations, the system shall require a personal access token instead of a password.`
 
@@ -77,7 +76,7 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 - **REPO-02-301:** `If a user pushes to an archived repository, then the system shall reject the push.`
 - **REPO-02-302:** `If a user pushes to a mirror repository, then the system shall reject the push (mirror repos are read-only).`
 - **REPO-02-303:** `If a user with 2FA enabled provides a password for HTTP Git operations, then the system shall reject the authentication.`
-- **REPO-02-304:** `If an SSH key is not registered in the system, then the system shall reject the SSH connection.`
+- **REPO-02-304:** `If an SSH key is not registered in the system, then the system shall reject the SSH connection (see INT-05 for SSH authentication details).`
 
 ---
 

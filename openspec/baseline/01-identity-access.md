@@ -12,9 +12,9 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 
 - **UA-01-001:** `The system shall require a unique username for each user account.`
 - **UA-01-002:** `The system shall normalize usernames to lowercase for comparison.`
-- **UA-01-003:** `The system shall reject usernames that match reserved names (".", "..", "-", and pattern "*.git", "*.wiki", "*.rss", "*.atom").`
+- **UA-01-003:** `The system shall reject usernames that match reserved names including ".", "..", "admin", "api", "assets", "attachments", "avatar", "captcha", "debug", "error", "explore", "favicon.ico", "ghost", "issues", "login", "metrics", "new", "notifications", "org", "pulls", "raw", "repo", "robots.txt", "search", "serviceworker.js", "ssh_info", "swagger.v1.json", "user", "v2", "gitea-actions", and reserved patterns "*.keys", "*.gpg", "*.rss", "*.atom", "*.png".`
 - **UA-01-004:** `The system shall require a valid email address for account registration.`
-- **UA-01-005:** `The system shall hash passwords using a configurable algorithm (default argon2).`
+- **UA-01-005:** `The system shall hash passwords using a configurable algorithm (default pbkdf2).`
 - **UA-01-006:** `The system shall enforce a configurable minimum password length (default 8 characters).`
 - **UA-01-007:** `The system shall assign user type "individual" to self-registered accounts.`
 
@@ -233,7 +233,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 
 ### Ubiquitous Requirements (Token Properties)
 
-- **AUTH-03-001:** `The system shall hash stored tokens using SHA-256 with salt.`
+- **AUTH-03-001:** `The system shall hash stored tokens using PBKDF2-HMAC-SHA256 with salt.`
 - **AUTH-03-002:** `The system shall store the last 8 characters of each token in plaintext for fast lookup.`
 - **AUTH-03-003:** `The system shall cache successfully validated tokens up to a configurable cache size.`
 
@@ -304,8 +304,8 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 
 ### Ubiquitous Requirements (Auth Source Properties)
 
-- **AUTH-06-001:** `The system shall support the following authentication source types: LDAP (BindDN), LDAP (simple auth), SMTP, PAM, OAuth2, SAML, SPNEGO/SSPI, and FreeIPA.`
-- **AUTH-06-002:** `The system shall store authentication source configurations with activation state.`
+- **AUTH-06-001:** `The system shall support the following authentication source types: Plain (database), LDAP (BindDN), LDAP (simple auth / direct bind), SMTP, PAM, OAuth2, and SPNEGO/SSPI.`
+- **AUTH-06-002:** `The system shall store authentication source configurations with activation state, display order, and per-source TLS configuration.`
 
 ### Event-Driven Requirements (Auth Source Workflow)
 
@@ -318,6 +318,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 - **AUTH-06-201:** `Where an LDAP source is configured with group-to-team mapping, the system shall assign users to teams based on their LDAP group membership.`
 - **AUTH-06-202:** `Where an LDAP source is configured with admin group filtering, the system shall grant admin privileges to users in the specified groups.`
 - **AUTH-06-203:** `Where an authentication source is configured to skip local 2FA, the system shall bypass 2FA for users authenticating through that source.`
+- **AUTH-06-204:** `Where an LDAP source is configured with restricted group filtering, the system shall mark users in those groups as restricted.`
 
 ### Unwanted Behaviour Requirements (Auth Source Errors)
 
@@ -387,7 +388,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 - **BR-01-002:** Email addresses must be unique across all accounts
 - **BR-01-003:** An instance must have at least one admin user at all times
 - **BR-01-004:** The last admin user cannot be demoted or deleted
-- **BR-01-005:** Password hashing algorithm applies instance-wide (not per-user)
+- **BR-01-005:** Password hashing algorithm applies instance-wide (not per-user); default is pbkdf2
 - **BR-01-006:** OAuth2 access token expiration is configurable (default 3600 seconds)
 - **BR-01-007:** OAuth2 refresh token expiration is configurable (default 730 hours)
 - **BR-01-008:** Each user may have at most one active TOTP 2FA configuration
@@ -415,7 +416,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 ## Success Criteria
 
 - User registration completes within 5 seconds for standard email/password flow
-- Password hashing uses argon2 by default with configurable parameters
+- Password hashing uses pbkdf2 by default with configurable parameters
 - Session lookup from cache completes in under 1ms
 - OAuth2 token issuance completes in under 500ms
 - TOTP verification accepts codes within the configured time skew window

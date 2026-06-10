@@ -13,7 +13,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-01-001:** `The system shall require the Issues unit to be enabled on a repository before issues can be created or viewed.`
 - **COLL-01-002:** `The system shall assign sequential issue numbers per repository that are never reused after deletion.`
 - **COLL-01-003:** `The system shall store the following properties per issue: title, body (markdown), author, assignees, labels, milestone, state (open/closed), creation timestamp, and update timestamp.`
-- **COLL-01-004:** `The system shall soft-delete issues rather than permanently removing them from the database.`
+- **COLL-01-004:** `The system shall permanently delete issues and all associated data (comments, labels, attachments) when deletion is confirmed.`
 - **COLL-01-005:** `The system shall render issue bodies as markdown with support for cross-references, mentions, and emoji.`
 - **COLL-01-006:** `The system shall support multiple assignees per issue.`
 - **COLL-01-007:** `The system shall auto-link references of the form #issue, !PR, @user, and commit SHAs within issue text.`
@@ -54,7 +54,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-02-001:** `The system shall require the PullRequests unit to be enabled on a repository before pull requests can be created or viewed.`
 - **COLL-02-002:** `The system shall store the following properties per PR: title, body (markdown), author, head branch, base branch, state (open/closed/merged), merge base SHA, and assignees.`
 - **COLL-02-003:** `The system shall assign sequential PR numbers per repository (sharing the same counter as issues).`
-- **COLL-02-004:** `The system shall support four merge strategies: merge commit, squash merge, rebase merge, and manually merged.`
+- **COLL-02-004:** `The system shall support six merge strategies: merge commit, squash merge, rebase merge, rebase-merge (rebase with merge commit), fast-forward-only, and manually merged.`
 - **COLL-02-005:** `The system shall detect and display merge conflicts between the head and base branches.`
 
 #### Event-Driven Requirements (PR Lifecycle)
@@ -135,7 +135,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 #### Event-Driven Requirements (Project Lifecycle)
 
-- **COLL-04-101:** `When a user creates a new project, the system shall initialize it with default columns: Backlog, In Progress, and Done.`
+- **COLL-04-101:** `When a user creates a new project, the system shall initialize it with default columns: To Do, In Progress, and Done.`
 - **COLL-04-102:** `When a user adds a column to a project, the system shall append it to the column list.`
 - **COLL-04-103:** `When a user moves a card between columns, the system shall update the card's column assignment and sort position.`
 - **COLL-04-104:** `When a user reorders columns, the system shall persist the new column ordering.`
@@ -333,8 +333,8 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 ## Business Rules
 
 - **BR-02-001:** Issue and PR numbers share a single sequential counter per repository and are never reused after deletion.
-- **BR-02-002:** Issues are soft-deleted; deleted issues remain in the database but are not visible in the UI.
-- **BR-02-003:** PR merge strategy selection is available to users with write permission; repository settings may restrict which strategies are permitted.
+- **BR-02-002:** Issues are permanently deleted; deleted issues and all associated data are removed from the database.
+- **BR-02-003:** PR merge strategy selection is available to users with write permission; repository settings may restrict which strategies are permitted. Six strategies are supported: merge commit, squash, rebase, rebase-merge, fast-forward-only, and manually merged.
 - **BR-02-004:** Wiki content is stored as a separate Git repository and is fully cloneable with standard Git tools.
 - **BR-02-005:** Project cards are references to issues and PRs, not copies; changes to the underlying issue or PR are reflected on the card.
 - **BR-02-006:** Milestone progress is auto-calculated as closed_issues / total_issues assigned to the milestone.
