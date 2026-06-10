@@ -1,364 +1,385 @@
 # 07 — Administration & Ops
 
-## 1. Admin Panel
-
-### What
-Central admin dashboard and management interface for system-wide operations: users, repos, orgs, auth sources, emails, hooks, queues, packages, runners.
-
-### Dashboard
-- System statistics: memory, goroutines, GC stats
-- Update checker status
-- Quick operations: sync branches/tags, run cron tasks
-- System health warnings
-- Self-check diagnostics
-
-### User Management
-- List/search/filter users (active, admin, restricted, 2FA, prohibited login)
-- Create/edit/delete users
-- Password management with complexity checks
-- Pwned password detection
-- 2FA reset
-- Avatar management
-- Email management
-
-### Repository Management
-- List/search repos
-- Delete repos
-- Unadopted repo detection and adoption from filesystem
-- Bulk operations
-
-### Organization Management
-- List/search orgs
-- Filter by status
-
-### Auth Source Management
-- Supported types: LDAP (BindDN), LDAP (simple), SMTP, OAuth2, PAM, SSPI, FreeIPA
-- Group-to-team mapping
-- Admin/restricted group filtering
-- Skip local 2FA option
-- TLS configuration
-- User sync (LDAP)
-
-### Email Management
-- List/search emails
-- Activate/deactivate emails
-- Set primary email
-
-### Hook Management
-- System webhook administration
-- Default webhook administration
-
-### Queue Management
-- View queue status (workers, items)
-- Adjust worker count
-- Clear queue items
-
-### Package Management
-- List/search packages
-- Delete package versions
-- Cleanup expired data
-
-### Runner Management
-- Actions runner administration
-
-### UI Routes
-- GET /admin — Dashboard
-- GET /admin/system_status — System status
-- GET /admin/self_check — Self check
-- GET /admin/users — User list
-- GET /admin/users/new — Create user
-- GET /admin/users/:userid/edit — Edit user
-- GET /admin/repos — Repo list
-- GET /admin/repos/unadopted — Unadopted repos
-- GET /admin/orgs — Org list
-- GET /admin/auths — Auth sources
-- GET /admin/auths/new — New auth source
-- GET /admin/auths/:authid — Edit auth source
-- GET /admin/emails — Email list
-- GET /admin/hooks — System hooks
-- GET /admin/monitor/queues — Queue monitor
-- GET /admin/monitor/queue/:qid — Queue detail
-- GET /admin/packages — Package list
-- GET /admin/actions/runners — Runner management
-
-### API Endpoints
-- Full CRUD in /api/v1/admin/* for users, orgs, repos, auth sources, runners
-
-### Config Viewer
-- GET /admin/config — Configuration summary (passwords shadowed)
-- GET /admin/config/settings — Dynamic settings
-- POST /admin/config/send_test_mail — Test email
-- POST /admin/config/change — Update settings
+Baseline specification of Gitea's administration dashboard, configuration, observability, backup, and debug subsystems. All requirements describe the current (v1.22.x) system behavior.
 
 ---
 
-## 2. Configuration System
+## 1. Admin Dashboard
 
-### What
-INI-based configuration with environment variable overrides. Loaded at startup, some settings dynamic.
+**User Story:** As an administrator, I want a central dashboard so that I can monitor system health and perform quick operational tasks.
 
-### Major Sections
-- [server]: protocol, domain, port, root URL, SSH, run user
-- [database]: type (MySQL/PostgreSQL/SQLite3/MSSQL), host, connection pool
-- [repository]: root path, default branch, signing, merge options, wiki, issues
-- [ui]: themes, language, time format, gravatar, paging
-- [indexer]: issue/repo indexer settings, backends
-- [ssh]: port, key path, builtin server
-- [lfs]: server, storage
-- [packages]: storage, allowed types, size limits
-- [actions]: log/artifact storage, retention, timeout, default actions URL
-- [webhook]: task queue, delivery timeout, retry
-- [mailer]: SMTP, sender, TLS
-- [cache]: adapter (memory/redis/memcache/twoqueue), TTL
-- [session]: provider, cookie, timeout
-- [log]: modes (console/file/conn/smtp), levels, paths
-- [markup]: markdown, custom renderers
-- [cron]: background task scheduling
-- [mirror]: update intervals, git timeout
-- [api]: swagger, response limits, paging
-- [oauth2]: provider settings, token expiration
-- [security]: install lock, secret key, password policy
-- [admin]: org creation, email notifications, disabled features
-- [attachment]: storage, allowed types, size limits
-- [federation]: ActivityPub, headers, digest
-- [camo]: URL rewriting for images
-- [other]: timeout settings
+### Ubiquitous Requirements (Dashboard Properties)
 
-### Config File Locations
-- Primary: custom/conf/app.ini
-- Environment variable overrides: GITEA__section__key format
-- Install wizard: LoadSettingsForInstall()
+- **ADM-01-001:** `The system shall display system statistics on the admin dashboard including memory usage, goroutine count, and GC stats.`
+- **ADM-01-002:** `The system shall present an update checker status indicating whether a newer Gitea version is available.`
+- **ADM-01-003:** `The system shall list quick operations on the dashboard including sync branches, sync tags, and run cron tasks.`
+
+### Event-Driven Requirements (Dashboard Workflow)
+
+- **ADM-01-101:** `When an admin navigates to /admin, the system shall render the dashboard with current system statistics.`
+- **ADM-01-102:** `When an admin triggers a quick operation from the dashboard, the system shall execute the operation and display the result.`
+- **ADM-01-103:** `When an admin navigates to /admin/self_check, the system shall run self-check diagnostics and display any warnings.`
+- **ADM-01-104:** `When an admin navigates to /admin/system_status, the system shall display detailed system status information.`
+
+### Unwanted Behaviour Requirements (Dashboard Errors)
+
+- **ADM-01-301:** `If a non-admin user attempts to access /admin routes, then the system shall return a 403 Forbidden response.`
 
 ---
 
-## 3. Queue System
+## 2. User Management
 
-### What
-Concurrent task processing with multiple backends and worker pool management.
+**User Story:** As an administrator, I want to manage user accounts so that I can create, modify, and remove user access as needed.
 
-### Queue Types
-- Simple Queue: basic FIFO
-- Unique Queue: prevents duplicate items
-- Worker Pool Queue: manages multiple workers
+### Ubiquitous Requirements (User List Properties)
 
-### Backends
-- Channel: in-memory (default, single instance)
-- LevelDB: persistent (single instance)
-- Redis: distributed (cluster deployments)
-- Dummy: immediate no-op (testing)
+- **ADM-02-001:** `The system shall list all user accounts with pagination support.`
+- **ADM-02-002:** `The system shall support filtering the user list by status: active, admin, restricted, 2FA enabled, and prohibited login.`
+- **ADM-02-003:** `The system shall support searching users by username or email address.`
 
-### Features
-- Dynamic worker count adjustment
-- Queue flushing and item removal
-- Batch processing
-- Error handling and retry
-- Graceful shutdown
+### Event-Driven Requirements (User CRUD Workflow)
 
-### Config
-- [queue] TYPE — backend type
-- [queue] DATADIR — LevelDB path
-- [queue] CONN_STR — Redis connection
-- [queue] LENGTH — queue length
-- [queue] BATCH_LENGTH — batch size
-- [queue] WORKERS — worker count
+- **ADM-02-101:** `When an admin creates a new user via the admin panel, the system shall create the account in the active state.`
+- **ADM-02-102:** `When an admin edits a user account, the system shall persist the changes immediately.`
+- **ADM-02-103:** `When an admin deletes a user account, the system shall transfer the user's repository ownership to a ghost user for attribution preservation.`
+- **ADM-02-104:** `When an admin sets a new password for a user, the system shall hash and store the password using the configured algorithm.`
 
----
+### Event-Driven Requirements (Password & 2FA Management)
 
-## 4. Metrics/Monitoring
+- **ADM-02-105:** `When an admin forces a password change for a user, the system shall set the must_change_password flag so the user must change their password at next login.`
+- **ADM-02-106:** `When an admin resets a user's 2FA, the system shall disable 2FA for that user and regenerate scratch codes.`
+- **ADM-02-107:** `When a new password is set and pwned password checking is enabled, the system shall check the password against known breach databases.`
 
-### What
-Prometheus-compatible metrics endpoint for monitoring Gitea instances.
+### Optional Feature Requirements (Avatar Management)
 
-### Endpoint
-- GET /api/v1/metrics (optional bearer token auth)
+- **ADM-02-201:** `Where a user has a custom avatar, the system shall display the custom avatar instead of the Gravatar default.`
 
-### Metrics Exposed
-- Build info (goarch, goos, goversion, version)
-- Access count, attachment count, comment count
-- Follow count, hook task count
-- Issue counts (total, open, closed, by label, by repo)
-- Label count, login source count, milestone count
-- Mirror count, OAuth count, organization count
-- Project counts, public key count, release count
-- Repository count, star count, team count
-- Update task count, user count, watch count, webhook count
+### Unwanted Behaviour Requirements (User Management Errors)
 
-### Config
-- [metrics] ENABLED — enable metrics endpoint
-- [metrics] TOKEN — bearer token (optional)
-- [metrics] ENABLED_ISSUE_BY_LABEL — per-label issue metrics
-- [metrics] ENABLED_ISSUE_BY_REPOSITORY — per-repo issue metrics
+- **ADM-02-301:** `If an admin attempts to delete the last admin user, then the system shall deny the deletion.`
+- **ADM-02-302:** `If an admin submits a password that does not meet complexity requirements, then the system shall reject the password and display the requirements.`
 
 ---
 
-## 5. Health Checks
+## 3. Repository Management
 
-### What
-Application health monitoring endpoint following RFC standard.
+**User Story:** As an administrator, I want to manage repositories across the instance so that I can delete repos and adopt unadopted ones from the filesystem.
 
-### Endpoint
-- GET /-/healthz
+### Ubiquitous Requirements (Repository List Properties)
 
-### Check Types
-- Database ping
-- Cache ping
+- **ADM-03-001:** `The system shall list all repositories with pagination support.`
+- **ADM-03-002:** `The system shall support searching repositories by name.`
 
-### Status Levels
-- pass: healthy (2xx-3xx)
-- fail: unhealthy (4xx-5xx)
-- warn: healthy with concerns (2xx-3xx)
+### Event-Driven Requirements (Repository Workflow)
 
-### Response Format
-```json
-{
-  "status": "pass|fail|warn",
-  "description": "Gitea",
-  "checks": {
-    "check_name": [{"status": "...", "time": "...", "output": "..."}]
-  }
-}
-```
+- **ADM-03-101:** `When an admin deletes a repository, the system shall remove the repository data and all associated resources.`
+- **ADM-03-102:** `When an admin navigates to /admin/repos/unadopted, the system shall scan the repository root path for directories not registered in the database.`
+- **ADM-03-103:** `When an admin adopts an unadopted repository, the system shall register it in the database and make it accessible.`
+- **ADM-03-104:** `When an admin deletes an unadopted repository, the system shall remove the directory from the filesystem.`
+
+### Unwanted Behaviour Requirements (Repository Errors)
+
+- **ADM-03-301:** `If an unadopted repository directory contains invalid data, then the system shall skip the directory during the unadopted scan.`
 
 ---
 
-## 6. Database Migrations
+## 4. Auth Source Management
 
-### What
-Version-controlled database schema evolution with automatic migration execution.
+**User Story:** As an administrator, I want to configure external authentication sources so that users can authenticate against LDAP, SMTP, OAuth2, and other providers.
 
-### Behaviors
-- Version table tracks current schema version
-- Sequential version numbering (min version: 70)
-- Each migration has unique description
-- Migrations run in order on startup
-- Organized by release version directories (v1_6 through v1_23)
+### Ubiquitous Requirements (Auth Source Properties)
 
-### Migration Interface
-- Description() string
-- Migrate(x *xorm.Engine) error
+- **ADM-04-001:** `The system shall support the following authentication source types: LDAP (BindDN), LDAP (simple auth), SMTP, OAuth2, PAM, SPNEGO/SSPI, and FreeIPA.`
+- **ADM-04-002:** `The system shall store authentication source configurations with activation state and display order.`
+- **ADM-04-003:** `The system shall allow TLS configuration per authentication source.`
 
----
+### Event-Driven Requirements (Auth Source CRUD)
 
-## 7. Backup/Restore (Dump)
+- **ADM-04-101:** `When an admin creates a new authentication source, the system shall make it available for login immediately upon activation.`
+- **ADM-04-102:** `When an admin updates an authentication source, the system shall persist the changes and apply them to subsequent login attempts.`
+- **ADM-04-103:** `When an admin deletes an authentication source, the system shall remove it and prevent further login through that source.`
+- **ADM-04-104:** `When an admin triggers an LDAP sync, the system shall synchronize user data from the LDAP directory to local accounts.`
 
-### What
-System backup via `dump` command. Creates archive of all Gitea data.
+### Optional Feature Requirements (Auth Source Features)
 
-### Output Formats
-- zip, tar, tar.gz, tar.xz, tar.bz2, tar.br, tar.lz4, tar.zst
+- **ADM-04-201:** `Where an LDAP source is configured with group-to-team mapping, the system shall assign users to teams based on their LDAP group membership.`
+- **ADM-04-202:** `Where an LDAP source is configured with admin group filtering, the system shall grant admin privileges to users in the specified groups.`
+- **ADM-04-203:** `Where an LDAP source is configured with restricted group filtering, the system shall mark users in those groups as restricted.`
+- **ADM-04-204:** `Where an authentication source is configured to skip local 2FA, the system shall bypass 2FA for users authenticating through that source.`
 
-### Backup Contents
-- Database dump
-- Repository files
-- Configuration (app.ini)
-- Attachments
-- Avatars
-- LFS objects
-- Package files
-- Log files
+### Unwanted Behaviour Requirements (Auth Source Errors)
 
-### Config
-- --tempdir — temporary directory
-- --skip-repository — skip repo data
-- --skip-lfs — skip LFS objects
-- --skip-attachment — skip attachments
-- --skip-package — skip packages
-- --skip-log — skip logs
-- --type — output format
+- **ADM-04-301:** `If an external authentication source is unreachable during login, then the system shall reject login attempts against that source with an error.`
+- **ADM-04-302:** `If an LDAP sync operation fails, then the system shall log the error and continue with the existing user data.`
 
 ---
 
-## 8. System Notices
+## 5. Configuration System
 
-### What
-System-wide notification tracking for administrative events.
+**User Story:** As an administrator, I want to view and modify Gitea's configuration so that I can adjust system behavior without restarting the server for dynamic settings.
 
-### Notice Types
-- NoticeRepository: repo-related events
-- NoticeTask: task-related events
+### Ubiquitous Requirements (Config Properties)
 
-### Features
-- Create, list (with pagination), delete notices
-- Delete by range or age
-- Automatic cleanup
+- **ADM-05-001:** `The system shall load INI-based configuration from custom/conf/app.ini at startup.`
+- **ADM-05-002:** `The system shall support environment variable overrides using the GITEA__section__key format.`
+- **ADM-05-003:** `The system shall classify configuration settings as static (require restart) or dynamic (apply immediately).`
+- **ADM-05-004:** `The system shall shadow passwords and secrets displayed in the configuration viewer.`
+- **ADM-05-005:** `The system shall support the following major configuration sections: server, database, repository, ui, indexer, ssh, lfs, packages, actions, webhook, mailer, cache, session, log, markup, cron, mirror, api, oauth2, security, admin, attachment, federation, camo, and other.`
 
-### UI Routes
-- GET /admin/notices — List notices
-- POST /admin/notices/delete — Delete notices
+### Event-Driven Requirements (Config Workflow)
 
----
+- **ADM-05-101:** `When an admin navigates to /admin/config, the system shall display the configuration summary with shadowed secrets.`
+- **ADM-05-102:** `When an admin navigates to /admin/config/settings, the system shall display dynamic settings that can be changed at runtime.`
+- **ADM-05-103:** `When an admin submits a configuration change via /admin/config/change, the system shall apply dynamic settings immediately and flag static settings as requiring restart.`
+- **ADM-05-104:** `When an admin sends a test email via /admin/config/send_test_mail, the system shall dispatch a test email to the specified address.`
+- **ADM-05-105:** `When the system starts with the install wizard, the system shall invoke LoadSettingsForInstall() to present initial configuration.`
 
-## 9. Application State
+### State-Driven Requirements (Config Lifecycle)
 
-### What
-Key-value state persistence for application coordination.
+- **ADM-05-701:** `While a static configuration setting has been changed but not applied via restart, the system shall indicate the pending change in the configuration viewer.`
 
-### Behaviors
-- Atomic updates with revision tracking
-- Context-based operations
-- Used for coordination between instances
+### Unwanted Behaviour Requirements (Config Errors)
 
----
-
-## 10. Logging
-
-### What
-Comprehensive logging infrastructure with multiple output modes.
-
-### Log Levels
-TRACE, DEBUG, INFO, WARN, ERROR, FATAL
-
-### Output Modes
-- Console: terminal with colors
-- File: rotating file output
-- Conn: network logging
-- SMTP: email-based log alerts
-
-### Features
-- Multiple log channels
-- Event formatting
-- Process tracing integration
-- Rotating file writer
-- Color support
-
-### Config
-- [log] MODE — output modes (comma-separated)
-- [log] LEVEL — default log level
-- [log.*] — per-mode configuration
+- **ADM-05-301:** `If the configuration file is missing or unreadable at startup, then the system shall fail to start with a descriptive error.`
+- **ADM-05-302:** `If an admin submits an invalid configuration value, then the system shall reject the change with a validation error.`
 
 ---
 
-## 11. Process Management
+## 6. Queue Management
 
-### What
-Process lifecycle management for Gitea's internal subprocess tracking.
+**User Story:** As an administrator, I want to monitor and manage background task queues so that I can ensure processing throughput and clear stuck items.
 
-### Features
-- PID tracking and context management
-- Parent-child process relationships
-- Stack trace collection
-- Graceful shutdown support
-- PProf integration
+### Ubiquitous Requirements (Queue Properties)
+
+- **ADM-06-001:** `The system shall support the following queue backends: channel (in-memory, default), LevelDB (persistent), Redis (distributed), and dummy (no-op).`
+- **ADM-06-002:** `The system shall provide three queue types: simple FIFO queue, unique queue (prevents duplicate items), and worker pool queue (manages multiple workers).`
+- **ADM-06-003:** `The system shall display queue status including number of workers, number of items, and queue length.`
+
+### Event-Driven Requirements (Queue Workflow)
+
+- **ADM-06-101:** `When an admin navigates to /admin/monitor/queues, the system shall display all queues with their current status.`
+- **ADM-06-102:** `When an admin navigates to /admin/monitor/queue/:qid, the system shall display detailed information for the specified queue.`
+- **ADM-06-103:** `When an admin adjusts the worker count for a queue, the system shall apply the change dynamically without restart.`
+- **ADM-06-104:** `When an admin clears a queue, the system shall remove all pending items from that queue.`
+- **ADM-06-105:** `When the system shuts down, the system shall gracefully drain all queues before terminating.`
+
+### Optional Feature Requirements (Queue Configuration)
+
+- **ADM-06-201:** `Where Redis is configured as the queue backend, the system shall connect using the CONN_STR setting and support distributed queue processing.`
+- **ADM-06-202:** `Where LevelDB is configured as the queue backend, the system shall persist queue data to the DATADIR path.`
+- **ADM-06-203:** `Where batch processing is configured, the system shall process queue items in groups up to BATCH_LENGTH size.`
+
+### Unwanted Behaviour Requirements (Queue Errors)
+
+- **ADM-06-301:** `If a queue backend connection fails, then the system shall log the error and fall back to in-memory processing where applicable.`
+- **ADM-06-302:** `If a queue item processing fails, then the system shall log the error and retry according to the retry policy.`
+
+---
+
+## 7. Metrics/Monitoring
+
+**User Story:** As an administrator, I want Prometheus-compatible metrics so that I can monitor my Gitea instance with standard observability tooling.
+
+### Ubiquitous Requirements (Metrics Properties)
+
+- **ADM-07-001:** `The system shall expose a Prometheus-compatible metrics endpoint at /api/v1/metrics.`
+- **ADM-07-002:** `The system shall expose build info metrics including goarch, goos, goversion, and version.`
+- **ADM-07-003:** `The system shall expose aggregate count metrics for repositories, users, organizations, issues, labels, milestones, mirrors, releases, teams, webhooks, and hooks.`
+
+### Event-Driven Requirements (Metrics Workflow)
+
+- **ADM-07-101:** `When a client requests /api/v1/metrics, the system shall return current metric values in Prometheus exposition format.`
+- **ADM-07-102:** `When metrics are enabled with a bearer token, the system shall require valid token authentication for the metrics endpoint.`
+
+### Optional Feature Requirements (Metrics Configuration)
+
+- **ADM-07-201:** `Where ENABLED_ISSUE_BY_LABEL is configured, the system shall expose per-label issue count metrics.`
+- **ADM-07-202:** `Where ENABLED_ISSUE_BY_REPOSITORY is configured, the system shall expose per-repository issue count metrics.`
+
+### Unwanted Behaviour Requirements (Metrics Errors)
+
+- **ADM-07-301:** `If metrics are not enabled in configuration, then the system shall return 404 for the metrics endpoint.`
+- **ADM-07-302:** `If a client requests metrics without a valid bearer token when TOKEN is configured, then the system shall reject the request with 401 Unauthorized.`
+
+---
+
+## 8. Health Checks
+
+**User Story:** As an administrator or load balancer, I want a health check endpoint so that I can determine if the Gitea instance is operating correctly.
+
+### Ubiquitous Requirements (Health Check Properties)
+
+- **ADM-08-001:** `The system shall expose a health check endpoint at /-/healthz.`
+- **ADM-08-002:** `The system shall report health status as pass, fail, or warn.`
+- **ADM-08-003:** `The system shall perform a database ping check as part of the health evaluation.`
+- **ADM-08-004:** `The system shall perform a cache ping check as part of the health evaluation.`
+
+### Event-Driven Requirements (Health Check Workflow)
+
+- **ADM-08-101:** `When a client requests /-/healthz, the system shall execute all configured health checks and return the aggregate status.`
+- **ADM-08-102:** `When all health checks pass, the system shall return status pass with HTTP 2xx-3xx.`
+- **ADM-08-103:** `When any health check fails, the system shall return status fail with HTTP 4xx-5xx.`
+- **ADM-08-104:** `When health checks pass but with concerns, the system shall return status warn with HTTP 2xx-3xx.`
+
+### Unwanted Behaviour Requirements (Health Check Errors)
+
+- **ADM-08-301:** `If the database is unreachable during a health check, then the system shall report status fail with the error output in the response.`
+
+---
+
+## 9. Database Migrations
+
+**User Story:** As an administrator, I want automatic database schema migrations so that my database stays current when upgrading Gitea versions.
+
+### Ubiquitous Requirements (Migration Properties)
+
+- **ADM-09-001:** `The system shall track the current schema version in a database version table.`
+- **ADM-09-002:** `The system shall use sequential version numbering for migrations (minimum version: 70).`
+- **ADM-09-003:** `The system shall require each migration to provide a unique description string.`
+- **ADM-09-004:** `The system shall organize migrations by release version directories (v1_6 through v1_23).`
+
+### Event-Driven Requirements (Migration Workflow)
+
+- **ADM-09-101:** `When the system starts and the database schema version is behind the latest, the system shall execute all pending migrations in sequential order.`
+- **ADM-09-102:** `When a migration completes successfully, the system shall update the schema version to that migration's version number.`
+
+### Unwanted Behaviour Requirements (Migration Errors)
+
+- **ADM-09-301:** `If a migration fails during execution, then the system shall halt startup and report the migration error.`
+- **ADM-09-302:** `If a migration is run out of order, then the system shall skip it and continue with the next required migration.`
+
+---
+
+## 10. Backup/Restore
+
+**User Story:** As an administrator, I want to create a full system backup so that I can recover from data loss or migrate to another server.
+
+### Ubiquitous Requirements (Backup Properties)
+
+- **ADM-10-001:** `The system shall support the following backup archive formats: zip, tar, tar.gz, tar.xz, tar.bz2, tar.br, tar.lz4, and tar.zst.`
+- **ADM-10-002:** `The system shall include database dump, repository files, configuration (app.ini), attachments, avatars, LFS objects, package files, and log files in the backup archive.`
+
+### Event-Driven Requirements (Backup Workflow)
+
+- **ADM-10-101:** `When the admin executes the dump command, the system shall create an archive containing all Gitea data.`
+- **ADM-10-102:** `When the dump command completes, the system shall write the archive to the specified output path.`
+
+### Optional Feature Requirements (Backup Selective Skip)
+
+- **ADM-10-201:** `Where --skip-repository is specified, the system shall exclude repository data from the backup archive.`
+- **ADM-10-202:** `Where --skip-lfs is specified, the system shall exclude LFS objects from the backup archive.`
+- **ADM-10-203:** `Where --skip-attachment is specified, the system shall exclude attachments from the backup archive.`
+- **ADM-10-204:** `Where --skip-package is specified, the system shall exclude package files from the backup archive.`
+- **ADM-10-205:** `Where --skip-log is specified, the system shall exclude log files from the backup archive.`
+
+### Unwanted Behaviour Requirements (Backup Errors)
+
+- **ADM-10-301:** `If the output path is not writable during dump, then the system shall fail with a permission error.`
+- **ADM-10-302:** `If the temporary directory (--tempdir) has insufficient disk space, then the system shall fail with a disk space error.`
+
+---
+
+## 11. Logging
+
+**User Story:** As an administrator, I want configurable logging so that I can capture system events at appropriate levels and route them to multiple outputs.
+
+### Ubiquitous Requirements (Logging Properties)
+
+- **ADM-11-001:** `The system shall support the following log levels in order of severity: TRACE, DEBUG, INFO, WARN, ERROR, FATAL.`
+- **ADM-11-002:** `The system shall support multiple simultaneous log output modes (console, file, conn, smtp).`
+- **ADM-11-003:** `The system shall allow independent configuration per log mode via [log.*] configuration sections.`
+
+### Event-Driven Requirements (Logging Workflow)
+
+- **ADM-11-101:** `When a log event occurs at a level equal to or above the configured threshold, the system shall write the event to all configured log modes.`
+- **ADM-11-102:** `When the rotating file writer reaches the configured size limit, the system shall rotate the log file.`
+- **ADM-11-103:** `When a FATAL level event is logged, the system shall terminate the process.`
+
+### Optional Feature Requirements (Logging Modes)
+
+- **ADM-11-201:** `Where console mode is configured, the system shall output log events to the terminal with color support.`
+- **ADM-11-202:** `Where file mode is configured, the system shall write log events to a rotating file on disk.`
+- **ADM-11-203:** `Where conn mode is configured, the system shall send log events to a network connection.`
+- **ADM-11-204:** `Where smtp mode is configured, the system shall send log events via email.`
+
+### Unwanted Behaviour Requirements (Logging Errors)
+
+- **ADM-11-301:** `If a log file cannot be written (permission denied, disk full), then the system shall fall back to console logging and report the error.`
+- **ADM-11-302:** `If an SMTP log mode connection fails, then the system shall fall back to console logging for that mode and log the connection error.`
 
 ---
 
 ## 12. Debug/PProf
 
-### What
-Built-in Go pprof endpoints for performance profiling.
+**User Story:** As an administrator, I want built-in profiling endpoints so that I can diagnose performance issues without installing external tooling.
 
-### Endpoints
-- /debug/pprof/ — Index
-- /debug/pprof/heap — Heap profiling
-- /debug/pprof/goroutine — Goroutine dump
-- /debug/pprof/threadcreate — Thread creation
-- /debug/pprof/block — Block profiling
-- /debug/pprof/mutex — Mutex profiling
-- /debug/pprof/cmdline — Command line
-- /debug/pprof/profile — CPU profile
-- /debug/pprof/symbol — Symbol lookup
-- /debug/pprof/trace — Execution trace
+### Ubiquitous Requirements (PProf Properties)
 
-### Constraints
-- Only available when PprofEnabled config is set
-- Should be disabled in production for security
+- **ADM-12-001:** `The system shall expose the following pprof endpoints: heap, goroutine, threadcreate, block, mutex, cmdline, profile, symbol, and trace.`
+- **ADM-12-002:** `The system shall present a pprof index page at /debug/pprof/ listing all available profiles.`
+
+### Event-Driven Requirements (PProf Workflow)
+
+- **ADM-12-101:** `When a client requests /debug/pprof/profile with a duration parameter, the system shall capture a CPU profile for that duration and return it.`
+- **ADM-12-102:** `When a client requests /debug/pprof/trace with a duration parameter, the system shall capture an execution trace for that duration and return it.`
+
+### Optional Feature Requirements (PProf Configuration)
+
+- **ADM-12-201:** `Where PprofEnabled configuration is set to true, the system shall register and serve the pprof HTTP endpoints.`
+
+### Unwanted Behaviour Requirements (PProf Constraints)
+
+- **ADM-12-301:** `If PprofEnabled is not set, then the system shall not register pprof endpoints and shall return 404 for all /debug/pprof/* requests.`
+- **ADM-12-302:** `If a CPU profile or trace capture is requested with an excessively long duration, then the system shall limit the duration to a safe maximum.`
+
+---
+
+## Business Rules
+
+- **BR-07-001:** Only users with admin privilege may access /admin/* routes and /api/v1/admin/* endpoints
+- **BR-07-002:** Configuration secrets (passwords, tokens, secret keys) are always shadowed in the configuration viewer
+- **BR-07-003:** Static configuration changes require a server restart to take effect
+- **BR-07-004:** Dynamic configuration changes take effect immediately without restart
+- **BR-07-005:** Database migrations execute in strict sequential order by version number
+- **BR-07-006:** The minimum database schema version is 70
+- **BR-07-007:** Queue worker count adjustments are dynamic and do not require restart
+- **BR-07-008:** Metrics endpoint requires ENABLED=true in [metrics] configuration
+- **BR-07-009:** Health check endpoint (/ -/healthz) is always available regardless of configuration
+- **BR-07-010:** PProf endpoints are disabled by default and must be explicitly enabled via PprofEnabled
+- **BR-07-011:** Backup archives contain all data by default; individual categories are excluded via flags
+- **BR-07-012:** Log levels are hierarchical: TRACE < DEBUG < INFO < WARN < ERROR < FATAL
+- **BR-07-013:** Authentication source order determines precedence when multiple sources match a user
+- **BR-07-014:** Ghost users are system accounts used for attribution preservation after user deletion
+
+## Edge Cases & Error Handling
+
+| Scenario | System Behavior |
+|----------|----------------|
+| Non-admin accesses /admin routes | Return 403 Forbidden |
+| Configuration file missing at startup | Fail to start with descriptive error |
+| Invalid config value submitted via UI | Reject change with validation error |
+| Database unreachable during health check | Report status fail with error output |
+| Migration failure during startup | Halt startup, report migration error |
+| Insufficient disk space during backup | Fail with disk space error |
+| Queue backend connection loss | Log error, fall back to in-memory processing |
+| Metrics endpoint requested when disabled | Return 404 |
+| PProf requested when not enabled | Return 404 for all /debug/pprof/* paths |
+| Log file write failure | Fall back to console logging |
+| LDAP sync during source outage | Log error, continue with cached user data |
+| Last admin user deletion attempt | Deny deletion |
+| Unadopted repo with invalid data | Skip directory during unadopted scan |
+
+## Success Criteria
+
+- Admin dashboard renders system statistics within 1 second
+- Configuration viewer loads with all secrets properly shadowed
+- Dynamic configuration changes apply within 1 second of submission
+- Queue status page reflects real-time worker and item counts
+- Prometheus metrics endpoint responds within 500ms
+- Health check endpoint responds within 2 seconds including all check types
+- Database migrations execute sequentially with zero data loss
+- Full backup completes within a time proportional to data size
+- Log events propagate to all configured modes within 100ms
+- PProf CPU profile capture respects the requested duration within 1 second tolerance
+- Auth source CRUD operations take effect immediately for subsequent login attempts
+- User search returns results within 2 seconds for instances with up to 100,000 users

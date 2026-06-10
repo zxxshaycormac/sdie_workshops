@@ -1,231 +1,425 @@
 # 01 — Identity & Access
 
-## 1. User Accounts
-
-### What
-Full user lifecycle management: registration, profile, avatar, email, password, blocking, badges, rename/redirect, deletion. Supports individual, organization, bot, and remote user types.
-
-### Registration & Login
-- Registration: manual with email confirmation, admin-created, OAuth2 auto-registration, external auth sources (LDAP, SMTP, etc.)
-- Login: plain password, LDAP (BindDN/simple), SMTP, PAM, OAuth2, SSPI/SPNEGO, OpenID
-- Username validation: normalization, reserved names check, character filtering
-- Account controls: activation, prohibition, restricted users
-
-### Profile Management
-- Properties: name, full name, email, location, website, description
-- Privacy: keep email private, keep activity private
-- Notification preferences: enabled, on-mention only, disabled, all including own
-- Visibility: Public, Limited (authenticated), Private (connections only)
-- Language preference, theme preference
-
-### Avatar Management
-- Sources: Gravatar, Libravatar, local upload, auto-generated (identicon/initials)
-- Hash-based storage with MD5 validation
-- Dynamic sizing
-
-### Email Management
-- Multiple emails per account (primary + secondary)
-- Per-email activation state with code-based verification and time limits
-- Email domain allow/block lists
-- Privacy: placeholder emails when kept private
-
-### Password Management
-- Configurable hashing (default argon2)
-- Configurable complexity rules
-- Time-limited reset codes
-- Force password change flag (must_change_password)
-- Optional Pwned password check (HaveIBeenPwned)
-
-### OpenID
-- Per-user OpenID URI list
-- Normalized URI storage
-- Visibility toggle in profile
-
-### User Blocking
-- User-to-user blocking with optional note/reason
-- Admins cannot be blocked
-- Blocked users hidden from view
-
-### Badges
-- Badge definition: slug (unique ID), description, image URL
-- Multiple badges per user
-- Admin-managed
-
-### User Redirect/Rename
-- Renaming creates persistent redirect from old name
-- Redirect cleanup when needed
-
-### Account Deletion
-- Soft deletion (deactivation) and hard deletion options
-- Ghost and actions system users for attribution
-
-### UI Routes
-- GET /user/login — Login page
-- GET /user/sign_up — Registration
-- GET /user/settings — User settings
-- GET /user/settings/profile — Profile
-- POST /user/settings/profile — Update profile
-- GET /user/settings/account — Account settings
-- POST /user/settings/account — Update account
-- GET /user/settings/email — Email management
-- POST /user/settings/email — Add email
-- POST /user/settings/email/delete — Delete email
-- GET /user/settings/security — Security settings
-- GET /user/settings/applications — Access tokens
-- POST /user/settings/applications — Create token
-- GET /user/settings/keys — SSH/GPG keys
-- POST /user/settings/keys — Add key
-- GET /user/settings/openid — OpenID
-- GET /{username} — User profile
-
-### API Endpoints
-- GET /user — Get current user
-- GET /users/{username} — Get user
-- GET /users/search — Search users
-- PATCH /user/settings — Update settings
-- POST /admin/users — Create user (admin)
-- PATCH /admin/users/{username} — Update user (admin)
-- DELETE /admin/users/{username} — Delete user (admin)
-
-### Config
-- [security] INSTALL_LOCK, SECRET_KEY, LOGIN_REMEMBER_DAYS, MIN_PASSWORD_LENGTH, PASSWORD_HASH_ALGO, PASSWORD_CHECK_PWN
-- [admin] DISABLE_REGULAR_ORG_CREATION, DEFAULT_EMAIL_NOTIFICATIONS, USER_DISABLED_FEATURES, EXTERNAL_USER_DISABLED_FEATURES
-- [service] DISABLE_REGISTRATION, REQUIRE_SIGNIN_VIEW, ENABLE_NOTIFY_MAIL, REGISTER_EMAIL_CONFIRM
+Baseline specification of Gitea's identity, authentication, authorization, and federation subsystems. All requirements describe the current (v1.22.x) system behavior.
 
 ---
 
-## 2. Authentication
+## 1. User Registration
 
-### Password Authentication
-- Local: salted password hash verification
-- Session: remember-me with configurable duration
-- Configurable hash algorithms
+**User Story:** As a new user, I want to create an account so that I can access Gitea's features.
 
-### OAuth2
-- **Provider**: RFC 6749 compliant
-  - Authorization code flow with PKCE
-  - Client types: Confidential and Public
-  - JWT token signing (RS256)
-  - Redirect URI validation
-  - Access/refresh token lifecycle
-- **Consumer**: external OAuth2 providers
-  - Built-in apps: git-credential-oauth, git-credential-manager, tea
-  - Custom app registration
-  - Auto-registration options
+### Ubiquitous Requirements (Registration Constraints)
 
-### Access Tokens (Personal Access Tokens)
-- Scopes:
-  - Activity: read:activitypub, write:activitypub
-  - Admin: read:admin, write:admin
-  - Misc: read:misc, write:misc
-  - Notification: read:notification, write:notification
-  - Organization: read:organization, write:organization
-  - Package: read:package, write:package
-  - Issue: read:issue, write:issue
-  - Repository: read:repository, write:repository
-  - User: read:user, write:user
-  - Special: all, public-only, sudo
-- Security: SHA-256 hashing with salt, last-8-index lookup, caching, usage tracking
+- **UA-01-001:** `The system shall require a unique username for each user account.`
+- **UA-01-002:** `The system shall normalize usernames to lowercase for comparison.`
+- **UA-01-003:** `The system shall reject usernames that match reserved names (".", "..", "-", and pattern "*.git", "*.wiki", "*.rss", "*.atom").`
+- **UA-01-004:** `The system shall require a valid email address for account registration.`
+- **UA-01-005:** `The system shall hash passwords using a configurable algorithm (default argon2).`
+- **UA-01-006:** `The system shall enforce a configurable minimum password length (default 8 characters).`
+- **UA-01-007:** `The system shall assign user type "individual" to self-registered accounts.`
 
-### Session Management
-- Database-backed sessions
-- CRUD: create, read, update, destroy, regenerate
-- Configurable lifetime with cleanup
-- Blob storage for session data
+### Event-Driven Requirements (Registration Workflow)
 
-### Two-Factor Authentication (2FA)
-- TOTP (RFC 6238) with PBKDF2 key derivation
-- AES-encrypted secret storage
-- Emergency scratch codes
-- Usage tracking
-- Enable/disable management
+- **UA-01-101:** `When a user submits a valid registration form, the system shall create a new user account.`
+- **UA-01-102:** `When registration requires email confirmation, the system shall send an activation email with a time-limited code.`
+- **UA-01-103:** `When a user clicks a valid activation link, the system shall activate the user account.`
+- **UA-01-104:** `When an admin creates a user via the admin panel, the system shall create the account in active state.`
+- **UA-01-105:** `When the setting REGISTER_EMAIL_CONFIRM is enabled, the system shall require email verification before allowing login.`
+- **UA-01-106:** `When the setting DISABLE_REGISTRATION is true, the system shall reject all self-registration attempts.`
 
-### WebAuthn/Passkey
-- WebAuthn Level 1 compliance
-- Registration and authentication
-- Multiple credentials per user
-- Sign count tracking, clone detection
+### Optional Feature Requirements (External Registration)
 
-### Authentication Sources
-- LDAP (BindDN): TLS, user search, attribute mapping, group membership, sync
-- LDAP (simple): direct bind
-- SMTP: email-based, TLS
-- PAM: Unix system auth
-- OAuth2: external providers
-- SAML: SAML 2.0
-- SPNEGO/SSPI: Windows/Kerberos
-- FreeIPA: specialized LDAP
+- **UA-01-201:** `Where OAuth2 auto-registration is enabled, the system shall create a local account when a new user authenticates via an external OAuth2 provider.`
+- **UA-01-202:** `Where an external authentication source (LDAP, SMTP, etc.) is configured and active, the system shall authenticate users against that source.`
+- **UA-01-203:** `Where password check against Pwned Passwords is enabled, the system shall warn users whose passwords appear in known breach databases.`
 
-### UI Routes
-- GET /user/login — Login
-- GET /user/two_factor — 2FA verification
-- GET /user/settings/security/two_factor — 2FA management
-- GET /user/settings/security/webauthn — WebAuthn management
-- GET /user/settings/applications/oauth2 — OAuth2 apps
-- GET /admin/auths — Auth sources (admin)
-- GET /admin/auths/new — Create auth source
-- GET /admin/auths/:id — Edit auth source
+### Unwanted Behaviour Requirements (Registration Errors)
 
-### Config
-- [oauth2] ENABLED, ACCESS_TOKEN_EXPIRATION_TIME, REFRESH_TOKEN_EXPIRATION_TIME, JWT_SIGNING_ALGORITHM, DEFAULT_APPLICATIONS
-- [oauth2_client] ENABLE_AUTO_REGISTRATION, USERNAME, UPDATE_AVATAR, ACCOUNT_LINKING, OPENID_CONNECT_SCOPES
-- [security] SUCCESSFUL_TOKENS_CACHE_SIZE
+- **UA-01-301:** `If a user submits a username that already exists, then the system shall reject the registration with an error message.`
+- **UA-01-302:** `If a user submits an email address already registered to another account, then the system shall reject the registration.`
+- **UA-01-303:** `If a user submits a password that does not meet complexity requirements, then the system shall reject the password and display the requirements.`
+- **UA-01-304:** `If an activation link has expired, then the system shall reject the activation and offer to resend the email.`
 
 ---
 
-## 3. Authorization / RBAC
+## 2. User Profile Management
 
-### What
-Hierarchical permission system: Owner > Admin > Write > Read > None. Applied at repo, org/team, and unit levels.
+**User Story:** As a user, I want to manage my profile so that others can identify and contact me.
 
-### Permission Modes
-- AccessModeNone (0): no access
-- AccessModeRead (1): read only
-- AccessModeWrite (2): read + write
-- AccessModeAdmin (3): read + write + admin
-- AccessModeOwner (4): full control
+### Ubiquitous Requirements (Profile Properties)
 
-### Repository-Level
-- Per-collaborator permissions
-- Branch protection integration
-- Git operation access control (SSH/HTTPS)
+- **UA-02-001:** `The system shall store the following profile properties per user: username, full name, email, location, website, and description.`
+- **UA-02-002:** `The system shall support three user visibility levels: public, limited (authenticated users only), and private (explicit connections only).`
+- **UA-02-003:** `The system shall store the user's language and theme preferences.`
+- **UA-02-004:** `The system shall support four notification preference levels: enabled, on-mention only, disabled, and all including own.`
 
-### Organization/Team-Level
-- Org visibility: Public, Limited, Private
-- Team-based access with unit-level permissions
-- Admin override capabilities
+### Event-Driven Requirements (Profile Updates)
 
-### Unit-Level Permissions
-- Per-repo-unit: Code, Issues, Pulls, Wiki, ExternalWiki, ExternalTracker, Projects, Packages, Actions
-- Team units: specific permissions per team per unit type
-- Owners bypass all restrictions
+- **UA-02-101:** `When a user updates their profile via settings, the system shall persist the changes immediately.`
+- **UA-02-102:** `When a user changes their visibility to private, the system shall hide the user from search results and explore pages for non-connections.`
+- **UA-02-103:** `When a user enables "keep email private", the system shall display a placeholder email address in the user's public profile.`
+- **UA-02-104:** `When a user enables "keep activity private", the system shall hide the user's activity feed from non-connections.`
 
-### Restricted Users
-- Limited visibility based on explicit restrictions
-- Can only see repos/teams they're explicitly added to
+### State-Driven Requirements (Restricted Users)
+
+- **UA-02-701:** `While a user is marked as restricted, the system shall limit the user's visibility to only repositories and teams to which they have been explicitly granted access.`
+- **UA-02-702:** `While a user is marked as prohibited from logging in, the system shall reject all authentication attempts for that user.`
+
+### Unwanted Behaviour Requirements (Profile Validation)
+
+- **UA-02-301:** `If a user enters an invalid website URL, then the system shall reject the input with a validation error.`
+- **UA-02-302:** `If a non-admin user attempts to change another user's profile, then the system shall deny the operation.`
 
 ---
 
-## 4. Federation
+## 3. Email Management
 
-### ActivityPub
-- Client implementation with HTTP Signature support
-- Activity Streams 2.1 content types
-- Signature verification for incoming requests
-- Signed outgoing requests
+**User Story:** As a user, I want to manage multiple email addresses so I can control which email is primary and keep others verified.
 
-### WebFinger
-- Resource discovery: acct: and mailto: schemes
-- JRD (JSON Resource Descriptor) response
-- Links: profile page, avatar, ActivityPub endpoint
-- Respects user privacy settings
+### Ubiquitous Requirements (Email Constraints)
 
-### NodeInfo
-- Schema 2.1 support
-- Instance metadata for federation discovery
-- Standard link locations
+- **UA-03-001:** `The system shall allow each user account to have multiple email addresses.`
+- **UA-03-002:** `The system shall designate exactly one email address as primary per account.`
+- **UA-03-003:** `The system shall track activation state independently for each email address.`
 
-### Config
-- [federation] ENABLED — enable federation
-- [federation] GET_HEADERS, POST_HEADERS — signed headers
-- [federation] DIGEST_ALGORITHM — sha-256 default
+### Event-Driven Requirements (Email Workflow)
+
+- **UA-03-101:** `When a user adds a new email address, the system shall send a verification email with a time-limited activation code.`
+- **UA-03-102:** `When a user clicks a valid email verification link, the system shall mark the email as activated.`
+- **UA-03-103:** `When a user sets a verified email as primary, the system shall update the account's primary email.`
+- **UA-03-104:** `When a user deletes an email address, the system shall remove it from the account, unless it is the last remaining email.`
+
+### Optional Feature Requirements (Email Domain Control)
+
+- **UA-03-201:** `Where email domain allow lists are configured, the system shall reject registration with email addresses from non-allowed domains.`
+- **UA-03-202:** `Where email domain block lists are configured, the system shall reject registration with email addresses from blocked domains.`
+
+### Unwanted Behaviour Requirements (Email Errors)
+
+- **UA-03-301:** `If a user adds an email address already registered to another account, then the system shall reject the addition.`
+- **UA-03-302:** `If a user attempts to delete their only email address, then the system shall reject the deletion.`
+- **UA-03-303:** `If an email verification code has expired, then the system shall reject the verification and offer to resend.`
+
+---
+
+## 4. Password Management
+
+**User Story:** As a user, I want to reset my password if I forget it, and as an admin, I want to enforce password policies.
+
+### Ubiquitous Requirements (Password Constraints)
+
+- **UA-04-001:** `The system shall hash all stored passwords using a configurable algorithm (argon2, bcrypt, scrypt, pbkdf2, or sha256).`
+- **UA-04-002:** `The system shall enforce configurable password complexity rules (minimum length, uppercase, lowercase, numbers, special characters).`
+
+### Event-Driven Requirements (Password Workflow)
+
+- **UA-04-101:** `When a user requests a password reset, the system shall send a time-limited reset code to the user's primary email.`
+- **UA-04-102:** `When a user submits a valid reset code with a new password, the system shall update the user's password.`
+- **UA-04-103:** `When an admin sets the must_change_password flag on a user, the system shall require the user to change their password at next login.`
+- **UA-04-104:** `When a user changes their password, the system shall invalidate all active sessions for that user.`
+
+### Unwanted Behaviour Requirements (Password Errors)
+
+- **UA-04-301:** `If a password reset code has expired, then the system shall reject the reset and offer to send a new code.`
+- **UA-04-302:** `If a user submits a password that does not meet complexity requirements, then the system shall reject the password with specific requirement feedback.`
+- **UA-04-303:** `If a user's current password is incorrect during a password change, then the system shall reject the change.`
+
+---
+
+## 5. User Blocking
+
+**User Story:** As a user, I want to block other users so they cannot interact with me or my repositories.
+
+### Event-Driven Requirements (Blocking Workflow)
+
+- **UA-05-101:** `When a user blocks another user, the system shall prevent the blocked user from commenting on the blocker's issues and PRs.`
+- **UA-05-102:** `When a user blocks another user, the system shall prevent the blocked user from creating PRs to the blocker's repositories.`
+- **UA-05-103:** `When a user blocks another user, the system shall prevent the blocked user from being added to teams the blocker manages.`
+- **UA-05-104:** `When a user blocks another user, the system shall allow the blocker to record an optional note describing the reason.`
+
+### Unwanted Behaviour Requirements (Blocking Restrictions)
+
+- **UA-05-301:** `If a user attempts to block an admin user, then the system shall deny the block operation.`
+- **UA-05-302:** `If a user attempts to block an organization, then the system shall deny the block operation (organizations cannot be blocked).`
+
+---
+
+## 6. User Rename & Deletion
+
+**User Story:** As a user, I want to rename my account, and as an admin, I want to delete accounts that are no longer needed.
+
+### Event-Driven Requirements (Rename Workflow)
+
+- **UA-06-101:** `When a user renames their account, the system shall create a persistent redirect from the old username to the new username.`
+- **UA-06-102:** `When a user renames their account, the system shall update all repository paths to reflect the new username.`
+- **UA-06-103:** `When a request targets a redirected username, the system shall redirect to the current username.`
+
+### Event-Driven Requirements (Deletion Workflow)
+
+- **UA-06-201:** `When an admin deletes a user account, the system shall transfer the user's repository ownership to a ghost user for attribution preservation.`
+- **UA-06-202:** `When an admin deletes a user account, the system shall remove the user from all team memberships.`
+- **UA-06-203:** `When an admin deletes a user account, the system shall remove all SSH keys, GPG keys, and access tokens associated with the account.`
+
+### Unwanted Behaviour Requirements (Deletion Safeguards)
+
+- **UA-06-301:** `If an admin attempts to delete the last admin user, then the system shall deny the deletion.`
+- **UA-06-302:** `If a non-admin user attempts to delete a user account, then the system shall deny the operation.`
+
+---
+
+## 7. Password Authentication & Sessions
+
+**User Story:** As a user, I want to log in with my credentials and maintain a session so I don't have to re-authenticate on every request.
+
+### Ubiquitous Requirements (Session Properties)
+
+- **AUTH-01-001:** `The system shall store sessions in the database with configurable lifetime.`
+- **AUTH-01-002:** `The system shall support session regeneration on privilege level changes.`
+
+### Event-Driven Requirements (Login Workflow)
+
+- **AUTH-01-101:** `When a user submits valid credentials, the system shall create an authenticated session.`
+- **AUTH-01-102:** `When a user selects "remember me" during login, the system shall extend the session duration to the configured LOGIN_REMEMBER_DAYS value.`
+- **AUTH-01-103:** `When a user logs out, the system shall destroy the current session.`
+- **AUTH-01-104:** `When a user logs out from all devices, the system shall destroy all sessions associated with the user.`
+
+### State-Driven Requirements (Session Lifecycle)
+
+- **AUTH-01-701:** `While a session is valid, the system shall allow the user to perform actions within their permission scope.`
+- **AUTH-01-702:** `While a session has expired, the system shall redirect the user to the login page on the next request.`
+
+### Unwanted Behaviour Requirements (Login Errors)
+
+- **AUTH-01-301:** `If a user submits invalid credentials, then the system shall reject the login attempt.`
+- **AUTH-01-302:** `If a user account is deactivated, then the system shall reject all login attempts with an appropriate message.`
+- **AUTH-01-303:** `If a user with 2FA enabled does not provide a valid TOTP code, then the system shall reject the login.`
+
+---
+
+## 8. OAuth2 Provider
+
+**User Story:** As a developer, I want to register an OAuth2 application so that external tools can access Gitea on my behalf.
+
+### Ubiquitous Requirements (OAuth2 Properties)
+
+- **AUTH-02-001:** `The system shall implement RFC 6749 OAuth2 authorization code flow with PKCE support.`
+- **AUTH-02-002:** `The system shall sign JWT tokens using a configurable algorithm (default RS256).`
+- **AUTH-02-003:** `The system shall support two client types: confidential and public.`
+
+### Event-Driven Requirements (OAuth2 Workflow)
+
+- **AUTH-02-101:** `When a user registers an OAuth2 application, the system shall generate a client ID and client secret.`
+- **AUTH-02-102:** `When a client presents a valid authorization code, the system shall issue an access token and refresh token.`
+- **AUTH-02-103:** `When a client presents a valid refresh token, the system shall issue a new access token.`
+- **AUTH-02-104:** `When an access token expires, the system shall reject API requests using that token.`
+- **AUTH-02-105:** `When a user revokes an OAuth2 grant, the system shall invalidate all tokens issued under that grant.`
+
+### Optional Feature Requirements (OAuth2 Configuration)
+
+- **AUTH-02-201:** `Where built-in OAuth2 applications are configured (git-credential-oauth, git-credential-manager, tea), the system shall pre-register these applications at startup.`
+- **AUTH-02-202:** `Where OAuth2 is disabled via configuration, the system shall reject all OAuth2 authorization and token requests.`
+
+### Unwanted Behaviour Requirements (OAuth2 Errors)
+
+- **AUTH-02-301:** `If a client submits an invalid redirect URI, then the system shall reject the authorization request.`
+- **AUTH-02-302:** `If a client submits an expired or invalid authorization code, then the system shall reject the token request.`
+- **AUTH-02-303:** `If a client submits credentials for a locked built-in application, then the system shall reject modification attempts.`
+
+---
+
+## 9. Access Tokens
+
+**User Story:** As a user, I want to create personal access tokens with specific scopes so that I can authenticate API requests without sharing my password.
+
+### Ubiquitous Requirements (Token Properties)
+
+- **AUTH-03-001:** `The system shall hash stored tokens using SHA-256 with salt.`
+- **AUTH-03-002:** `The system shall store the last 8 characters of each token in plaintext for fast lookup.`
+- **AUTH-03-003:** `The system shall cache successfully validated tokens up to a configurable cache size.`
+
+### Event-Driven Requirements (Token Workflow)
+
+- **AUTH-03-101:** `When a user creates a personal access token, the system shall generate a secure random token and display it once.`
+- **AUTH-03-102:** `When a token is created with specific scopes, the system shall restrict the token's API access to those scopes only.`
+- **AUTH-03-103:** `When a user deletes a token, the system shall invalidate the token immediately and remove it from the cache.`
+
+### Unwanted Behaviour Requirements (Token Errors)
+
+- **AUTH-03-301:** `If an API request presents an invalid token, then the system shall reject the request with 401 Unauthorized.`
+- **AUTH-03-302:** `If an API request presents a valid token lacking the required scope, then the system shall reject the request with 403 Forbidden.`
+- **AUTH-03-303:** `If a token is used after deletion, then the system shall reject the request.`
+
+---
+
+## 10. Two-Factor Authentication (2FA)
+
+**User Story:** As a user, I want to enable 2FA so that my account is protected even if my password is compromised.
+
+### Ubiquitous Requirements (2FA Properties)
+
+- **AUTH-04-001:** `The system shall implement TOTP (RFC 6238) for two-factor authentication.`
+- **AUTH-04-002:** `The system shall encrypt TOTP secrets using AES with PBKDF2 key derivation.`
+- **AUTH-04-003:** `The system shall generate emergency scratch codes when 2FA is enabled.`
+
+### Event-Driven Requirements (2FA Workflow)
+
+- **AUTH-04-101:** `When a user enables 2FA, the system shall generate a TOTP secret and display a QR code for authenticator app setup.`
+- **AUTH-04-102:** `When a user with 2FA enabled logs in, the system shall require a valid TOTP code after password verification.`
+- **AUTH-04-103:** `When a user enters a valid scratch code, the system shall accept it as a valid second factor and consume that code.`
+- **AUTH-04-104:** `When an admin resets a user's 2FA, the system shall disable 2FA and regenerate scratch codes.`
+
+### Unwanted Behaviour Requirements (2FA Errors)
+
+- **AUTH-04-301:** `If a user submits an invalid TOTP code, then the system shall reject the login attempt.`
+- **AUTH-04-302:** `If a user submits an already-consumed scratch code, then the system shall reject the code.`
+- **AUTH-04-303:** `If a user attempts to enable 2FA without verifying a valid TOTP code, then the system shall reject the setup.`
+
+---
+
+## 11. WebAuthn / Passkey
+
+**User Story:** As a user, I want to use a hardware security key or passkey for passwordless authentication.
+
+### Ubiquitous Requirements (WebAuthn Properties)
+
+- **AUTH-05-001:** `The system shall implement WebAuthn Level 1 for passwordless authentication.`
+- **AUTH-05-002:** `The system shall allow multiple WebAuthn credentials per user.`
+
+### Event-Driven Requirements (WebAuthn Workflow)
+
+- **AUTH-05-101:** `When a user registers a WebAuthn credential, the system shall store the credential with sign count tracking.`
+- **AUTH-05-102:** `When a user authenticates with a WebAuthn credential, the system shall verify the sign count to detect credential cloning.`
+- **AUTH-05-103:** `When a user deletes a WebAuthn credential, the system shall remove it and prevent future authentication with that credential.`
+
+### Unwanted Behaviour Requirements (WebAuthn Errors)
+
+- **AUTH-05-301:** `If a WebAuthn authentication attempt has a lower sign count than the stored value, then the system shall flag the credential as potentially cloned.`
+- **AUTH-05-302:** `If a user has no remaining WebAuthn credentials, then the system shall fall back to password-based authentication.`
+
+---
+
+## 12. External Authentication Sources
+
+**User Story:** As an admin, I want to configure external authentication sources (LDAP, SMTP, etc.) so that users can log in with their existing corporate credentials.
+
+### Ubiquitous Requirements (Auth Source Properties)
+
+- **AUTH-06-001:** `The system shall support the following authentication source types: LDAP (BindDN), LDAP (simple auth), SMTP, PAM, OAuth2, SAML, SPNEGO/SSPI, and FreeIPA.`
+- **AUTH-06-002:** `The system shall store authentication source configurations with activation state.`
+
+### Event-Driven Requirements (Auth Source Workflow)
+
+- **AUTH-06-101:** `When a user authenticates via an external source for the first time, the system shall create a local user account linked to the external identity.`
+- **AUTH-06-102:** `When an LDAP source has synchronization enabled, the system shall periodically sync user data from the LDAP directory.`
+- **AUTH-06-103:** `When an admin creates a new authentication source, the system shall make it available for login immediately upon activation.`
+
+### Optional Feature Requirements (Auth Source Features)
+
+- **AUTH-06-201:** `Where an LDAP source is configured with group-to-team mapping, the system shall assign users to teams based on their LDAP group membership.`
+- **AUTH-06-202:** `Where an LDAP source is configured with admin group filtering, the system shall grant admin privileges to users in the specified groups.`
+- **AUTH-06-203:** `Where an authentication source is configured to skip local 2FA, the system shall bypass 2FA for users authenticating through that source.`
+
+### Unwanted Behaviour Requirements (Auth Source Errors)
+
+- **AUTH-06-301:** `If an external authentication source is unreachable, then the system shall reject login attempts against that source with an error.`
+- **AUTH-06-302:** `If an LDAP sync operation fails, then the system shall log the error and continue with the existing user data.`
+
+---
+
+## 13. Permission System (RBAC)
+
+**User Story:** As a system administrator, I want fine-grained access control so that users only access resources they are authorized for.
+
+### Ubiquitous Requirements (Permission Hierarchy)
+
+- **RBAC-01-001:** `The system shall define five permission levels in strict hierarchy: None (0), Read (1), Write (2), Admin (3), Owner (4).`
+- **RBAC-01-002:** `The system shall enforce permission inheritance such that each higher level includes all capabilities of lower levels.`
+- **RBAC-01-003:** `The system shall apply permissions at three scopes: repository (collaborator), organization/team, and unit (feature-level).`
+
+### Event-Driven Requirements (Permission Evaluation)
+
+- **RBAC-01-101:** `When a user accesses a repository, the system shall compute the effective permission from collaborator, team, and organization memberships.`
+- **RBAC-01-102:** `When a user accesses a feature unit (code, issues, pulls, wiki, projects, packages, actions), the system shall check unit-level permissions for that user.`
+- **RBAC-01-103:** `When an owner-level user accesses any resource in their scope, the system shall grant full access regardless of other restrictions.`
+
+### Optional Feature Requirements (Unit Permissions)
+
+- **RBAC-01-201:** `Where team unit permissions are configured, the system shall restrict team members to the specified unit types with the specified access levels.`
+- **RBAC-01-202:** `Where a repository unit is disabled, the system shall hide that feature from all users regardless of permission level.`
+
+### State-Driven Requirements (Restricted Users)
+
+- **RBAC-01-701:** `While a user is marked as restricted, the system shall only allow access to repositories where the user is an explicit collaborator or team member.`
+
+---
+
+## 14. Federation (ActivityPub, WebFinger, NodeInfo)
+
+**User Story:** As a federated user, I want my Gitea profile to be discoverable by users on other ActivityPub-compatible platforms.
+
+### Ubiquitous Requirements (Federation Properties)
+
+- **FED-01-001:** `The system shall implement ActivityPub client functionality with HTTP Signature support.`
+- **FED-01-002:** `The system shall use Activity Streams 2.1 content types for federation messages.`
+- **FED-01-003:** `The system shall support NodeInfo 2.1 schema for instance metadata publishing.`
+
+### Event-Driven Requirements (Federation Workflow)
+
+- **FED-01-101:** `When a remote platform sends a WebFinger query for a local user, the system shall return a JRD response with profile, avatar, and ActivityPub links.`
+- **FED-01-102:** `When the system sends outgoing federation requests, the system shall sign the requests with HTTP Signatures using configured headers.`
+- **FED-01-103:** `When the system receives incoming signed requests, the system shall verify the HTTP Signature before processing.`
+
+### Optional Feature Requirements (Federation Configuration)
+
+- **FED-01-201:** `Where federation is enabled, the system shall expose ActivityPub, WebFinger, and NodeInfo endpoints.`
+- **FED-01-202:** `Where federation is disabled, the system shall return 404 for all federation endpoints.`
+
+### Unwanted Behaviour Requirements (Federation Errors)
+
+- **FED-01-301:** `If a WebFinger query targets a private user, then the system shall return a 404 response.`
+- **FED-01-302:** `If an incoming federation request has an invalid signature, then the system shall reject the request with 401.`
+
+---
+
+## Business Rules
+
+- **BR-01-001:** Usernames must be unique across the entire instance (case-insensitive)
+- **BR-01-002:** Email addresses must be unique across all accounts
+- **BR-01-003:** An instance must have at least one admin user at all times
+- **BR-01-004:** The last admin user cannot be demoted or deleted
+- **BR-01-005:** Password hashing algorithm applies instance-wide (not per-user)
+- **BR-01-006:** OAuth2 access token expiration is configurable (default 3600 seconds)
+- **BR-01-007:** OAuth2 refresh token expiration is configurable (default 730 hours)
+- **BR-01-008:** Each user may have at most one active TOTP 2FA configuration
+- **BR-01-009:** Permission inheritance is strict: Owner > Admin > Write > Read > None
+- **BR-01-010:** Restricted users can only see repositories they are explicitly added to
+- **BR-01-011:** User blocking is directional (blocker → blockee), not reciprocal
+- **BR-01-012:** Ghost users are system accounts used for attribution after account deletion
+- **BR-01-013:** Federation respects user visibility settings (private users are not discoverable)
+
+## Edge Cases & Error Handling
+
+| Scenario | System Behavior |
+|----------|----------------|
+| Username collision during rename | Reject rename, keep current username |
+| Last email deletion | Reject deletion, user must keep at least one email |
+| 2FA verification after password change | Sessions invalidated, must re-authenticate with 2FA |
+| Expired activation/reset codes | Reject and offer to resend |
+| LDAP sync during source outage | Log error, continue with cached user data |
+| WebAuthn sign count regression | Flag credential as potentially cloned, warn user |
+| Token lookup cache miss | Fall back to database lookup |
+| Blocked user creates PR via fork | Reject PR creation to blocker's repos |
+| OAuth2 app redirect URI mismatch | Reject authorization request |
+| Multiple auth sources for same user | Link external identities to single local account |
+
+## Success Criteria
+
+- User registration completes within 5 seconds for standard email/password flow
+- Password hashing uses argon2 by default with configurable parameters
+- Session lookup from cache completes in under 1ms
+- OAuth2 token issuance completes in under 500ms
+- TOTP verification accepts codes within the configured time skew window
+- WebAuthn registration supports all FIDO2-compatible authenticators
+- Permission computation for any resource completes in under 50ms
+- Federation signature verification completes in under 100ms
+- Token scope validation prevents all unauthorized API access
