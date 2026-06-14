@@ -45,7 +45,7 @@
 **Rule**: Every test that touches the DB lives under `models/` or `tests/integration/` and goes through `models/unittest`. The package's `TestMain` calls `unittest.MainTest(m)`, which initialises a SQLite DB, syncs all registered tables, and loads fixtures. Each `TestXxx` calls `unittest.PrepareTestDatabase()` as its first line to reset fixtures to a known state.
 **Why**: `unittest.MainTest` reads YAML fixtures from `models/fixtures/` (one file per table — `user.yml`, `repository.yml`, `access.yml`, 72 files total) and `PrepareTestDatabase` reloads them between tests so they are hermetic. Bypassing the framework means writing fixtures by hand and breaking parallelism.
 **Frequency**: universal across DB-backed tests; `unittest.PrepareTestDatabase` is the established entry point.
-**Exceptions**: Pure-logic tests with no DB dependency (a parser, a validator) skip `unittest` entirely — see `design.md` Section 7. Tests in `modules/` that DO need the DB are documented as isolation violations in `modules/CLAUDE.md` Section 1; do not add new ones.
+**Exceptions**: Pure-logic tests with no DB dependency (a parser, a validator) skip `unittest` entirely — see `design.md` Section 7. Tests in `modules/` that DO need the DB inherit the isolation violation of the package under test; do not add new ones.
 
 ---
 

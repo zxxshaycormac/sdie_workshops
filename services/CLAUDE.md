@@ -18,7 +18,7 @@
 **Rule**: Multi-model write operations are wrapped here, not in `routers/` and not in `models/`. The preferred idiom is `db.WithTx(ctx, func(ctx context.Context) error { ... })`, which auto-commits on nil and rolls back on error; legacy code in the same package may use `ctx, committer, err := db.TxContext(ctx); defer committer.Close(); ... committer.Commit()`. Match whichever idiom the surrounding file already uses.
 **Why**: A service workflow (create repo + init git + seed labels + watch) must atomically succeed or roll back; if the router opened the transaction, every call site would have to remember to. `WithTx`/`TxContext` are transaction-aware — nested calls reuse the parent session as a `halfCommitter`, so a service calling another service inside a transaction does not double-begin.
 **Frequency**: common. `db.WithTx` appears 30 times across 23 files (e.g. `services/repository/create.go:245`, `services/repository/branch.go:307,515,603`, `services/repository/fork.go:139,222`, `services/pull/merge.go:478`, `services/attachment/attachment.go:27`); `db.TxContext` appears 27 times across 19 files (e.g. `services/repository/delete.go:38,418`, `services/repository/transfer.go:104,343,435`, `services/org/org.go:23`, `services/user/user.go:63,213`). `WithTx` is the newer, dominant pattern — prefer it for new code.
-**Exceptions**: Single-statement reads never open a transaction (see `models/CLAUDE.md` Section 3). Migrations are exempt (they run before `models/db` is wired).
+**Exceptions**: Single-statement reads never open a transaction. Migrations are exempt (they run before `models/db` is wired).
 
 ---
 
@@ -34,7 +34,7 @@
 ## 4. Side Effects — Notify, Webhook, Mail From Services, Not Models
 
 **Rule**: Notifications, webhooks, and email originate in `services/`. The `services/notify` package exposes a `Notifier` interface plus `RegisterNotifier`; orchestration code calls `notify_service.NewIssue(...)`, `notify_service.MergePullRequest(...)`, etc., and the registered notifiers fan out the side effect. Webhook payloads are prepared via `services/webhook.PrepareWebhooks` (`services/webhook/webhook.go:186`).
-**Why**: Models should remain CRUD-only (see `models/CLAUDE.md` Section 6); if a model write directly triggered HTTP callbacks, the data layer would drag in network and template dependencies. Centralising the trigger in `services/` lets the same workflow run from the web UI, the API, the CLI, and migrations with the same fan-out.
+**Why**: Models should remain CRUD-only; if a model write directly triggered HTTP callbacks, the data layer would drag in network and template dependencies. Centralising the trigger in `services/` lets the same workflow run from the web UI, the API, the CLI, and migrations with the same fan-out.
 **Frequency**: universal. Registered notifiers: `services/webhook/notifier.go:26`, `services/uinotification/notify.go:36`, plus notifiers in `services/mailer`, `services/feed`, `services/actions`, `services/indexer`, `services/mirror`, `services/automerge`. Each notifier's methods are the only producers of `PrepareWebhooks` calls and mail sends.
 **Exceptions**: none. New event types add a method to the `Notifier` interface (`services/notify/notifier.go:18`), a `NullNotifier` no-op (`services/notify/null.go`), and a forwarding wrapper in `services/notify/notify.go`; then call the wrapper from the service that emits the event.
 
