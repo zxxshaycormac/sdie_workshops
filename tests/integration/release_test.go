@@ -240,6 +240,88 @@ func TestViewTagsList(t *testing.T) {
 	assert.EqualValues(t, []string{"v1.0", "delete-tag", "v1.1"}, tagNames)
 }
 
+func TestTagsListSearch(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 1})
+	link := repo.Link() + "/tags"
+	session := loginUser(t, "user1")
+
+	t.Run("q filters by substring", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=v1")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, rsp.Body)
+		tagNames := make([]string, 0, 5)
+		htmlDoc.Find(".tag-list-row-link").Each(func(i int, s *goquery.Selection) {
+			tagNames = append(tagNames, s.Text())
+		})
+		assert.ElementsMatch(t, []string{"v1.0", "v1.1"}, tagNames)
+	})
+
+	t.Run("q is case-insensitive", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=V1")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, rsp.Body)
+		tagNames := make([]string, 0, 5)
+		htmlDoc.Find(".tag-list-row-link").Each(func(i int, s *goquery.Selection) {
+			tagNames = append(tagNames, s.Text())
+		})
+		assert.ElementsMatch(t, []string{"v1.0", "v1.1"}, tagNames)
+	})
+
+	t.Run("q with no matches renders empty list", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=nomatch")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, rsp.Body)
+		assert.Equal(t, 0, htmlDoc.Find(".tag-list-row-link").Length())
+	})
+
+	t.Run("empty q returns all tags", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, rsp.Body)
+		assert.Equal(t, 3, htmlDoc.Find(".tag-list-row-link").Length())
+	})
+}
+
+func TestTagListJSONSearch(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 1})
+	link := repo.Link() + "/tags/list"
+	session := loginUser(t, "user1")
+
+	t.Run("q filters JSON results by substring", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=v1")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		var resp struct {
+			Results []string `json:"results"`
+		}
+		DecodeJSON(t, rsp, &resp)
+		assert.ElementsMatch(t, []string{"v1.0", "v1.1"}, resp.Results)
+	})
+
+	t.Run("q is case-insensitive", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=DELETE")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		var resp struct {
+			Results []string `json:"results"`
+		}
+		DecodeJSON(t, rsp, &resp)
+		assert.ElementsMatch(t, []string{"delete-tag"}, resp.Results)
+	})
+
+	t.Run("empty q returns all tags", func(t *testing.T) {
+		req := NewRequest(t, "GET", link+"?q=")
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		var resp struct {
+			Results []string `json:"results"`
+		}
+		DecodeJSON(t, rsp, &resp)
+		assert.ElementsMatch(t, []string{"v1.0", "delete-tag", "v1.1"}, resp.Results)
+	})
+}
+
 func TestDownloadReleaseAttachment(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 

@@ -719,6 +719,16 @@ func GetTagList(ctx *context.Context) {
 		ctx.JSON(http.StatusInternalServerError, err)
 		return
 	}
+	if q := ctx.FormTrim("q"); q != "" {
+		lower := strings.ToLower(q)
+		filtered := tags[:0]
+		for _, t := range tags {
+			if strings.Contains(strings.ToLower(t), lower) {
+				filtered = append(filtered, t)
+			}
+		}
+		tags = filtered
+	}
 	resp := &branchTagSearchResponse{}
 	resp.Results = tags
 	ctx.JSON(http.StatusOK, resp)
