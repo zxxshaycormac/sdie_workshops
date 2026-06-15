@@ -218,20 +218,25 @@ func TestTagsSearch(t *testing.T) {
 
 	t.Run("PaginationWithKeyword", func(t *testing.T) {
 		defer tests.PrintCurrentTest(t)()
-		// Force pagination with limit=1. repo1 has at least 2 tags matching "v1"
-		// (e.g. v1.0 and v1.1), so the pagination widget must reflect the FILTERED
-		// count, not the unfiltered total. The bug being guarded against: pagination
-		// showing the unfiltered count when a keyword narrows the result set.
-		req := NewRequest(t, "GET", "/user2/repo1/tags?q=v1&limit=1")
+		// Regression guard: when the keyword narrows the result set to fit in a
+		// single page, the pagination widget MUST NOT render. Before the fix,
+		// TagsList used ctx.Data["NumTags"] (unfiltered total = 3 for repo1),
+		// so a 1-result search with limit=1 would still render pagination for
+		// 3 pages — clicking pages 2 or 3 returned empty results. After the fix,
+		// TagsList uses the filtered count (1), so pagination is suppressed.
+		// repo1 fixtures: exactly one tag (v1.0) matches q=v1.0 with HasSha1=true.
+		req := NewRequest(t, "GET", "/user2/repo1/tags?q=v1.0&limit=1")
 		resp := session.MakeRequest(t, req, http.StatusOK)
 		htmlDoc := NewHTMLParser(t, resp.Body)
 
-		// Count total visible tag rows on page 1.
+		// One matching tag fits within page size 1.
 		visibleCount := htmlDoc.doc.Find(".tag-list-row-link").Length()
-		assert.LessOrEqual(t, visibleCount, 1, "page size 1 should show at most 1 tag")
+		assert.Equal(t, 1, visibleCount, "exactly one tag should match v1.0")
 
-		// The pagination widget must show >1 page (because multiple v1* tags exist).
+		// templates/base/paginate.tmpl renders pagination only when TotalPages > 1.
+		// With filtered count=1 and limit=1, TotalPages=1, so no pagination renders.
+		// The buggy code (unfiltered count=3) would have rendered pagination here.
 		pageLinks := htmlDoc.doc.Find(".pagination a")
-		assert.Greater(t, pageLinks.Length(), 0, "pagination links should appear when filtered count exceeds page size")
+		assert.Equal(t, 0, pageLinks.Length(), "pagination must not render when filtered count fits in one page")
 	})
 }
