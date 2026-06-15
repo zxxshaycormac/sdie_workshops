@@ -57,13 +57,9 @@ The single difference from the Branches pattern: Branches uses `builder.Like{"na
 
 ### 1. `models/repo/release.go`
 
-Add a `Keyword` field to the `FindReleasesOptions` struct (around line 228):
+Add a `Keyword string` field to the `FindReleasesOptions` struct (lines 229-238).
 
-```go
-Keyword string
-```
-
-In `ToConds()` (same file, lines 228-266), append after the existing conditions:
+In `ToConds()` (lines 240-266), append a new clause after the existing conditions (after the `HasSha1` block at lines 258-264, before the `return cond` at line 265):
 
 ```go
 if opts.Keyword != "" {
@@ -71,25 +67,29 @@ if opts.Keyword != "" {
 }
 ```
 
-Ensure `"strings"` is in the import block (it likely already is, given the file's other uses).
+The `"strings"` package is already imported (line 14); no import change needed.
 
 ### 2. `routers/web/repo/release.go`
 
-In `TagsList` (lines 204-251), immediately after the existing `page` / `limit` reads (around lines 215-216):
+In `TagsList` (lines 204-251), add immediately after the `listOptions` block closes at line 224 (before the `opts := repo_model.FindReleasesOptions{` literal at line 226):
 
 ```go
 keyword := ctx.FormString("q")
 ```
 
-Inject `keyword` into the `FindReleasesOptions` literal at its construction site, and in the `ctx.Data` assignment block near the end of the function:
+In the `opts` literal (lines 226-234), add a `Keyword: keyword,` field (e.g., after the `RepoID` line at 233).
+
+Right after `ctx.Data["Releases"] = releases` (line 242), add:
 
 ```go
 ctx.Data["Keyword"] = keyword
 ```
 
+Pagination at lines 244-247 already calls `pager.SetDefaultParams(ctx)`, which automatically carries `q` through page links — no change needed there.
+
 ### 3. `templates/repo/tag/list.tmpl`
 
-Insert the search form above the tag list, after the existing `release_tag_header` partial and before the tag list/table. Pattern copied from `templates/repo/branch/list.tmpl:76-80`:
+The current template opens with `release_tag_header` at line 6 and wraps the tag table in `{{if .Releases}}` at line 7. Insert the search form between lines 6 and 7 so it renders even when the search returns zero results (otherwise users could not retry with a different keyword). Pattern copied from `templates/repo/branch/list.tmpl:76-80`:
 
 ```html
 <div class="ui attached segment">
@@ -101,7 +101,7 @@ Insert the search form above the tag list, after the existing `release_tag_heade
 
 ### 4. `options/locale/locale_en-US.ini`
 
-In the `[search]` section (near `branch_kind` / `commit_kind`, around lines 178-179), add:
+The `[search]` section starts at line 162. `branch_kind` is at line 178 and `commit_kind` at line 179. Add at line 180:
 
 ```ini
 tag_kind = Search tags...
@@ -109,9 +109,9 @@ tag_kind = Search tags...
 
 Other 40+ locale files are translated by the community; do not machine-translate.
 
-### 5. `tests/integration/repo_tag_test.go` (new file or append to existing)
+### 5. `tests/integration/repo_tag_test.go` (append to existing file)
 
-Add an integration test covering two cases:
+The file already exists. Add two integration tests:
 - **Hit**: GET `/{owner}/{repo}/tags?q=<known-tag-name-fragment>` returns HTTP 200 and the response body contains the matching tag row.
 - **Miss**: GET `/{owner}/{repo}/tags?q=<nonexistent-string>` returns HTTP 200 and the response body does not contain any tag row.
 
