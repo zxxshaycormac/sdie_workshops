@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"code.gitea.io/gitea/models"
@@ -200,5 +201,37 @@ func TestTagsSearch(t *testing.T) {
 		resp := session.MakeRequest(t, req, http.StatusOK)
 		htmlDoc := NewHTMLParser(t, resp.Body)
 		assert.GreaterOrEqual(t, htmlDoc.doc.Find(".tag-list-row-link").Length(), 1, "expected tags to render when no keyword is supplied")
+	})
+
+	t.Run("CaseInsensitive", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+		// lower_tag_name column stores lowercase; uppercase query must still match.
+		req := NewRequest(t, "GET", "/user2/repo1/tags?q=V1.1")
+		resp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, resp.Body)
+		tagLinks := htmlDoc.doc.Find(".tag-list-row-link")
+		assert.GreaterOrEqual(t, tagLinks.Length(), 1, "uppercase query should still match via lower_tag_name")
+		tagLinks.Each(func(i int, s *goquery.Selection) {
+			assert.Contains(t, strings.ToLower(s.Text()), "v1.1", "case-insensitive match failed")
+		})
+	})
+
+	t.Run("PaginationWithKeyword", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+		// Force pagination with limit=1. repo1 has at least 2 tags matching "v1"
+		// (e.g. v1.0 and v1.1), so the pagination widget must reflect the FILTERED
+		// count, not the unfiltered total. The bug being guarded against: pagination
+		// showing the unfiltered count when a keyword narrows the result set.
+		req := NewRequest(t, "GET", "/user2/repo1/tags?q=v1&limit=1")
+		resp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, resp.Body)
+
+		// Count total visible tag rows on page 1.
+		visibleCount := htmlDoc.doc.Find(".tag-list-row-link").Length()
+		assert.LessOrEqual(t, visibleCount, 1, "page size 1 should show at most 1 tag")
+
+		// The pagination widget must show >1 page (because multiple v1* tags exist).
+		pageLinks := htmlDoc.doc.Find(".pagination a")
+		assert.Greater(t, pageLinks.Length(), 0, "pagination links should appear when filtered count exceeds page size")
 	})
 }
