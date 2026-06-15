@@ -21,6 +21,7 @@ import (
 	"code.gitea.io/gitea/services/release"
 	"code.gitea.io/gitea/tests"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,5 +163,42 @@ func TestRepushTag(t *testing.T) {
 		resp = MakeRequest(t, req, http.StatusOK)
 		DecodeJSON(t, resp, &respRelease)
 		assert.False(t, respRelease.IsDraft)
+	})
+}
+
+func TestTagsSearch(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	session := loginUser(t, "user2")
+
+	t.Run("Hit", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+		// "v1.1" exists in repo1 fixtures (models/fixtures/release.yml).
+		req := NewRequest(t, "GET", "/user2/repo1/tags?q=v1.1")
+		resp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, resp.Body)
+		tagLinks := htmlDoc.doc.Find(".tag-list-row-link")
+		assert.GreaterOrEqual(t, tagLinks.Length(), 1, "expected at least one tag matching 'v1.1'")
+		// Every visible tag link's text must contain the keyword (proves filtering works).
+		tagLinks.Each(func(i int, s *goquery.Selection) {
+			assert.Contains(t, s.Text(), "v1.1", "non-matching tag leaked into filtered result set")
+		})
+	})
+
+	t.Run("Miss", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+		req := NewRequest(t, "GET", "/user2/repo1/tags?q=zzz-not-a-real-tag-xyz")
+		resp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, resp.Body)
+		assert.Equal(t, 0, htmlDoc.doc.Find(".tag-list-row-link").Length(), "expected zero tag rows for a non-matching keyword")
+	})
+
+	t.Run("EmptyKeywordPreservesBehavior", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+		// No q param: same as before the feature shipped.
+		req := NewRequest(t, "GET", "/user2/repo1/tags")
+		resp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, resp.Body)
+		assert.GreaterOrEqual(t, htmlDoc.doc.Find(".tag-list-row-link").Length(), 1, "expected tags to render when no keyword is supplied")
 	})
 }
