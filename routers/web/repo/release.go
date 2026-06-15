@@ -216,6 +216,9 @@ func TagsList(ctx *context.Context) {
 		Page:     ctx.FormInt("page"),
 		PageSize: ctx.FormInt("limit"),
 	}
+	if listOptions.Page <= 0 {
+		listOptions.Page = 1
+	}
 	if listOptions.PageSize == 0 {
 		listOptions.PageSize = setting.Repository.Release.DefaultPagingNum
 	}
@@ -236,7 +239,7 @@ func TagsList(ctx *context.Context) {
 		Keyword:       keyword,
 	}
 
-	releases, err := db.Find[repo_model.Release](ctx, opts)
+	releases, total, err := db.FindAndCount[repo_model.Release](ctx, opts)
 	if err != nil {
 		ctx.ServerError("GetReleasesByRepoID", err)
 		return
@@ -245,8 +248,7 @@ func TagsList(ctx *context.Context) {
 	ctx.Data["Releases"] = releases
 	ctx.Data["Keyword"] = keyword
 
-	numTags := ctx.Data["NumTags"].(int64)
-	pager := context.NewPagination(int(numTags), opts.PageSize, opts.Page, 5)
+	pager := context.NewPagination(int(total), opts.PageSize, opts.Page, 5)
 	pager.SetDefaultParams(ctx)
 	ctx.Data["Page"] = pager
 
