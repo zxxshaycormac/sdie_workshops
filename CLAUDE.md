@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Feature Specs
+
+Baseline feature specification lives at `openspec/specs/spec.md` (index into 9 category files). Consult it before implementing or modifying a feature to find the relevant routes, API endpoints, config keys, and constraints.
+
 ## Build & Run
 
 ```bash
