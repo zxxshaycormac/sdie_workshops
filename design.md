@@ -219,3 +219,49 @@ Locale files live in `options/locale/` as `locale_<lang>.ini` (40+ languages; `l
 **Why**: A single source of truth for what "read", "write", "admin" mean keeps permission decisions consistent across the codebase.
 **Frequency**: universal.
 **Exceptions**: none.
+
+---
+
+## 9. UI Behavior Conventions
+
+This section governs cross-cutting UI behavior — the contracts every page should honor regardless of feature. It does not prescribe visual design (colors, spacing, typography); those belong in a future style guide. It covers only behaviors that are testable and observable.
+
+**Rule**: Every button or link that triggers an async operation shall enter a disabled + spinner state for the duration of the request and shall not accept a second click until the response arrives.
+**Why**: Prevents double-submit race conditions (duplicate comments, duplicate merges, duplicate deletes) and gives the user visible feedback that the click was received.
+**Frequency**: universal for forms, action buttons, and async links.
+**Exceptions**: Pure-navigation links need no spinner; button-as-link patterns that don't trigger a request can stay enabled.
+
+**Rule**: Operations expected to take longer than 200ms shall display a loading indicator (skeleton, spinner, or `is-loading` class) at the location where the result will appear, not at a distant page chrome.
+**Why**: Below 200ms the operation feels instant; above 200ms the user needs feedback. Locating the indicator at the result site lets the user keep reading surrounding content.
+**Frequency**: common for list views, dashboard widgets, modal data fetches.
+**Exceptions**: Pre-cached or pre-rendered data needs no loading state.
+
+**Rule**: Errors from form submissions shall be displayed inline next to the offending field when the error is field-level, and at the top of the form when the error is form-level. Errors from page-level operations shall render a dedicated status template (`templates/status/*.tmpl`) rather than a partial page.
+**Why**: Inline errors let the user fix the problem without losing context. Page-level errors via dedicated templates ensure consistent styling and prevent half-rendered UI.
+**Frequency**: universal.
+**Exceptions**: Background operations (webhook delivery, queue items, cron failures) surface errors via the admin notices panel (ADM-13), not the user UI.
+
+**Rule**: Empty lists and first-use states shall render a guided empty state (the `templates/repo/empty.tmpl` pattern) explaining what is missing and what action the user can take — never a bare "no results".
+**Why**: A bare "no results" leaves the user uncertain whether the system is broken, the data is missing, or the filter is wrong. A guided empty state explains the situation and offers a next step.
+**Frequency**: common for new repositories, first-time visits, filtered lists.
+**Exceptions**: Search results with no matches may use a simpler "no results for query" message since the user already knows what they searched for.
+
+**Rule**: Transient success and non-blocking error feedback shall use the toast system (`web_src/js/modules/toast.js`) rather than flash redirects or `alert()` dialogs. Toasts shall auto-dismiss after a configurable timeout and shall stack without overlapping.
+**Why**: Toasts let the user continue working without dismissing a modal. Auto-dismiss prevents toast graveyards. Stacking prevents overlap when multiple toasts fire in quick succession (e.g. multi-file upload).
+**Frequency**: common for save success, copy-to-clipboard confirmation, async failure.
+**Exceptions**: Blocking errors that require user acknowledgment (e.g. merge conflict, validation failure on submit) shall use a modal or inline error, not a toast.
+
+**Rule**: Destructive or irreversible operations (delete repository, delete user, transfer repository, force-push to a protected branch) shall require confirmation via a modal (`web_src/js/features/comp/ConfirmModal.js`) and shall require the user to type the entity name when the operation is irreversible.
+**Why**: Confirmation modals prevent accidental clicks on destructive actions. Typed confirmation for irreversible actions acts as an intent filter — the friction is the feature.
+**Frequency**: common for delete/transfer operations.
+**Exceptions**: Reversible destructive operations (delete a draft comment, unstar a repo, unpin an issue) can use a simple confirm modal without typed input.
+
+**Rule**: Toggles that change per-user state (reactions, stars, watches, subscription mode) shall update the UI optimistically before the server confirms and shall revert on failure. Operations that mutate shared state (merge PR, close issue, change visibility, transfer ownership) shall wait for server confirmation before updating the UI.
+**Why**: Per-user toggles are idempotent and almost always succeed; making the user wait feels slow. Shared-state mutations need server truth because other users see the result.
+**Frequency**: common.
+**Exceptions**: none.
+
+**Rule**: Keyboard shortcuts shall use the established defaults (`/` for site search, `?` for shortcut help, `c` for compose/create in scoped contexts) and shall be discoverable via the help overlay triggered by `?`.
+**Why**: Consistent defaults let power users transfer muscle memory across pages. Discoverability via `?` ensures new users find the shortcuts without documentation.
+**Frequency**: common for high-traffic pages.
+**Exceptions**: Single-purpose admin pages may omit shortcuts; pages with text inputs shall suppress single-key shortcuts while the input has focus.
