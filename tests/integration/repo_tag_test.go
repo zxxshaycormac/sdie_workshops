@@ -164,3 +164,77 @@ func TestRepushTag(t *testing.T) {
 		assert.False(t, respRelease.IsDraft)
 	})
 }
+
+func TestTagsListSearchFilter(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 1})
+	owner := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: repo.OwnerID})
+	session := loginUser(t, owner.Name)
+
+	// Repo 1's /tags page shows 3 rows: v1.1, delete-tag, v1.0.
+
+	t.Run("no q returns all tags", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		req := NewRequestf(t, "GET", "/%s/%s/tags", owner.Name, repo.Name)
+		resp := session.MakeRequest(t, req, http.StatusOK)
+
+		body := resp.Body.String()
+		assert.Contains(t, body, ">v1.1<")
+		assert.Contains(t, body, ">delete-tag<")
+		assert.Contains(t, body, ">v1.0<")
+	})
+
+	t.Run("q=v1 returns only matching tags", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		req := NewRequestf(t, "GET", "/%s/%s/tags?q=v1", owner.Name, repo.Name)
+		resp := session.MakeRequest(t, req, http.StatusOK)
+
+		body := resp.Body.String()
+		assert.Contains(t, body, ">v1.1<")
+		assert.Contains(t, body, ">v1.0<")
+		assert.NotContains(t, body, ">delete-tag<")
+	})
+
+	t.Run("q=delete returns only delete-tag", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		req := NewRequestf(t, "GET", "/%s/%s/tags?q=delete", owner.Name, repo.Name)
+		resp := session.MakeRequest(t, req, http.StatusOK)
+
+		body := resp.Body.String()
+		assert.Contains(t, body, ">delete-tag<")
+		assert.NotContains(t, body, ">v1.1<")
+		assert.NotContains(t, body, ">v1.0<")
+	})
+
+	t.Run("non-matching q renders empty state", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		req := NewRequestf(t, "GET", "/%s/%s/tags?q=definitely-not-a-real-tag", owner.Name, repo.Name)
+		resp := session.MakeRequest(t, req, http.StatusOK)
+
+		body := resp.Body.String()
+		assert.NotContains(t, body, ">v1.1<")
+		assert.NotContains(t, body, ">delete-tag<")
+		assert.NotContains(t, body, ">v1.0<")
+		// search.no_results is "No matching results found." in locale_en-US.ini
+		assert.Contains(t, body, "No matching results found")
+		// search box stays visible and pre-filled
+		assert.Contains(t, body, `value="definitely-not-a-real-tag"`)
+	})
+
+	t.Run("empty q behaves like no q", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		req := NewRequestf(t, "GET", "/%s/%s/tags?q=", owner.Name, repo.Name)
+		resp := session.MakeRequest(t, req, http.StatusOK)
+
+		body := resp.Body.String()
+		assert.Contains(t, body, ">v1.1<")
+		assert.Contains(t, body, ">delete-tag<")
+		assert.Contains(t, body, ">v1.0<")
+	})
+}
