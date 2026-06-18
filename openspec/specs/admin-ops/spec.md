@@ -320,6 +320,129 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ---
 
+## 13. Admin Notices (ADM-13)
+
+**User Story:** As an administrator, I want a notices panel showing system warnings and errors so that I can investigate incidents and operational anomalies.
+
+### Ubiquitous Requirements (Notice Properties)
+
+- **ADM-13-001:** `The system shall record admin notices for noteworthy runtime events including cron failures, migration errors, and storage backend issues.`
+- **ADM-13-002:** `The system shall classify each notice by type (warning, error, info).`
+- **ADM-13-003:** `The system shall timestamp and store the notice description and originating context.`
+
+### Event-Driven Requirements (Notice Workflow)
+
+- **ADM-13-101:** `When a runtime event warrants admin attention, the system shall insert a notice record.`
+- **ADM-13-102:** `When an admin navigates to /admin/notices, the system shall render the paginated notice list.`
+- **ADM-13-103:** `When an admin dismisses a notice, the system shall mark the notice as resolved and remove it from the active list.`
+- **ADM-13-104:** `When an admin triggers bulk dismissal, the system shall resolve every selected notice in a single transaction.`
+- **ADM-13-105:** `When a new notice is created after the admin dashboard was last viewed, the system shall display a notice badge on the admin navigation.`
+
+### Unwanted Behaviour Requirements (Notice Errors)
+
+- **ADM-13-301:** `If a non-admin attempts to view the notices page, then the system shall return 403 Forbidden.`
+- **ADM-13-302:** `If a notice references an entity that has since been deleted, then the system shall render the notice with a "stale reference" indicator rather than failing.`
+
+---
+
+## 14. Doctor Diagnostic Checks (ADM-14)
+
+**User Story:** As an administrator, I want to run consistency checks and apply repairs so that I can detect and fix data corruption, broken references, and misconfiguration.
+
+### Ubiquitous Requirements (Doctor Properties)
+
+- **ADM-14-001:** `The system shall provide a doctor subcommand exposing a curated set of consistency checks.`
+- **ADM-14-002:** `The system shall classify each check as either read-only (diagnostic) or repairing (writes changes).`
+- **ADM-14-003:** `The system shall expose checks covering authorized SSH keys, repository count integrity, dangling LFS objects, orphaned hooks, broken symlink references, and stale archive caches.`
+
+### Event-Driven Requirements (Doctor Workflow)
+
+- **ADM-14-101:** `When an admin runs the doctor check command without arguments, the system shall run all read-only checks and report any failures.`
+- **ADM-14-102:** `When an admin runs doctor with a specific check name, the system shall execute only that check.`
+- **ADM-14-103:** `When an admin runs doctor with the --fix flag, the system shall execute every repairing check and apply fixes.`
+- **ADM-14-104:** `When a repairing check encounters a destructive fix, the system shall prompt for confirmation unless --yes is supplied.`
+- **ADM-14-105:** `When a check completes successfully, the system shall print a summary and exit 0; on failure the system shall exit non-zero.`
+
+### State-Driven Requirements (Doctor Safety)
+
+- **ADM-14-701:** `While the system is running in --fix mode, the system shall log every applied change to the audit log and to the admin notices panel.`
+
+### Optional Feature Requirements (Doctor Configuration)
+
+- **ADM-14-201:** `Where a check is run via the CLI with --log-level=debug, the system shall emit per-item diagnostic output.`
+
+### Unwanted Behaviour Requirements (Doctor Errors)
+
+- **ADM-14-301:** `If a repairing check is run without --fix, then the system shall report the issues it would fix but shall not modify any data.`
+- **ADM-14-302:** `If the database is unreachable during a doctor run, the system shall halt the run and report the failure.`
+- **ADM-14-303:** `If a check fails due to an internal error, the system shall log the error, continue with remaining checks, and report the failure in the summary.`
+
+---
+
+## 15. CLI Command Surface (ADM-15)
+
+**User Story:** As an operator, I want a CLI entry point so that I can run Gitea as a server, perform admin operations, and execute maintenance tasks from the command line.
+
+### Ubiquitous Requirements (CLI Properties)
+
+- **ADM-15-001:** `The system shall expose a single gitea binary with subcommands including web, serv, admin, doctor, dump, hook, keys, migrate, migrate-storage, manager, restore-cert, generate, convert, checks, and help.`
+- **ADM-15-002:** `The system shall load configuration from custom/conf/app.ini before executing any subcommand.`
+- **ADM-15-003:** `The system shall accept command-line flags and GITEA__ prefixed environment variables as configuration overrides.`
+
+### Event-Driven Requirements (CLI Workflow)
+
+- **ADM-15-101:** `When an operator runs gitea web, the system shall initialize configuration, database, services, and start the HTTP and (optionally) SSH servers.`
+- **ADM-15-102:** `When the SSH server invokes gitea serv on an authenticated SSH session, the system shall execute the requested git-upload-pack or git-receive-pack as the authenticated user.`
+- **ADM-15-103:** `When git invokes gitea hook pre-receive, update, or post-receive, the system shall execute the corresponding server-side hook pipeline.`
+- **ADM-15-104:** `When an operator runs gitea admin user create, the system shall create a user account without requiring web access.`
+- **ADM-15-105:** `When an operator runs gitea admin auth list/add/update/delete, the system shall manage external authentication sources from the command line.`
+- **ADM-15-106:** `When an operator runs gitea dump, the system shall produce a backup archive per ADM-10.`
+- **ADM-15-107:** `When an operator runs gitea migrate, the system shall execute pending database migrations without starting the server.`
+- **ADM-15-108:** `When an operator runs gitea migrate-storage, the system shall transfer attachments, LFS objects, packages, or avatars between storage backends.`
+
+### Optional Feature Requirements (CLI Configuration)
+
+- **ADM-15-201:** `Where the operator passes --custom-path or --config, the system shall load configuration from the specified location instead of the default.`
+- **ADM-15-202:** `Where the operator passes --work-path, the system shall treat the specified directory as the Gitea working root.`
+
+### Unwanted Behaviour Requirements (CLI Errors)
+
+- **ADM-15-301:** `If configuration loading fails before subcommand dispatch, then the system shall exit non-zero with a descriptive error.`
+- **ADM-15-302:** `If a subcommand receives invalid flags or arguments, then the system shall print usage and exit non-zero.`
+- **ADM-15-303:** `If a subcommand requires database access and the database is unreachable, then the system shall report the connection failure and exit non-zero.`
+
+---
+
+## Configuration Reference
+
+The following INI sections configure administration and operations behaviors.
+
+### [cache] Section
+
+- **ADAPTER**: Cache backend (`memory`, `redis`, `memcache`, `twoqueue`).
+- **INTERVAL**: Garbage collection interval for the memory adapter (seconds, default 60).
+- **HOST**: Connection string for redis/memcache backends (`redis://host:port`, etc.).
+- **ITEM_TTL**: Time-to-live for cached items.
+
+### [cache.last_commit] Section
+
+- **ENABLED**: Enable caching of last-commit metadata for repository file views.
+- **ITEM_TTL**: Time-to-live for last-commit cache entries (default 8760h = 1 year).
+- **COMMITS_COUNT**: Minimum commits required for a repository to use the cache.
+
+### [database] Section
+
+- **DB_TYPE**: Database backend (`sqlite3`, `mysql`, `postgres`, `mssql`).
+- **HOST**, **NAME**, **USER**, **PASSWD**, **SCHEMA**: Connection parameters.
+- **SSL_MODE**: SSL mode (`disable`, `require`, `verify-ca`, `verify-full`).
+- **CHARSET**: Connection charset (default `utf8` for MySQL).
+- **PATH**: SQLite file path.
+- **LOG_SQL**: Log every SQL statement at debug level.
+- **DB_RETRIES**, **DB_RETRY_BACKOFF**: Connection retry behavior during startup.
+- **MAX_IDLE_CONNS**, **MAX_OPEN_CONNS**, **CONN_MAX_LIFETIME**: Connection pool tuning.
+
+---
+
 ## Business Rules
 
 - **BR-07-001:** Only users with admin privilege may access /admin/* routes and /api/v1/admin/* endpoints

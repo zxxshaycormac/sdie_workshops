@@ -369,6 +369,218 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 ---
 
+## 12. Deploy Keys (REPO-12)
+
+**User Story:** As a repository administrator, I want to register per-repository SSH public keys so that CI/CD systems can clone or push without sharing a user account's keys.
+
+### Ubiquitous Requirements (Deploy Key Properties)
+
+- **REPO-12-001:** `The system shall scope each deploy key to exactly one repository.`
+- **REPO-12-002:** `The system shall allow each deploy key to be marked read-only or read-write.`
+- **REPO-12-003:** `The system shall store the SSH public key, fingerprint, title, creation timestamp, and associated repository for each deploy key.`
+- **REPO-12-004:** `The system shall allow the same SSH public key to be registered as a deploy key on multiple repositories without conflict.`
+
+### Event-Driven Requirements (Deploy Key Workflow)
+
+- **REPO-12-101:** `When an admin submits an SSH public key as a deploy key for a repository, the system shall store the key and compute its fingerprint.`
+- **REPO-12-102:** `When an SSH connection authenticates with a deploy key, the system shall grant access scoped to the associated repository only.`
+- **REPO-12-103:** `When a deploy key marked read-only attempts a git-receive-pack, the system shall reject the push.`
+- **REPO-12-104:** `When an admin deletes a deploy key, the system shall remove the key and reject future SSH authentications using that key.`
+
+### Optional Feature Requirements (Deploy Key Sources)
+
+- **REPO-12-201:** `Where a deploy key title is provided at creation, the system shall display the title in the deploy-key management list.`
+- **REPO-12-202:** `Where an admin creates a deploy key by generating a new SSH keypair, the system shall display the private key once for download and store only the public key.`
+
+### Unwanted Behaviour Requirements (Deploy Key Errors)
+
+- **REPO-12-301:** `If a deploy key attempts to access a repository other than its scoped repository, then the system shall reject the operation.`
+- **REPO-12-302:** `If a non-admin user attempts to add or delete a deploy key, then the system shall deny the operation.`
+- **REPO-12-303:** `If a submitted SSH public key is malformed, then the system shall reject the deploy-key creation with a parse error.`
+
+---
+
+## 13. Anonymous Git Clone for Public Repositories (REPO-13)
+
+**User Story:** As an unauthenticated user, I want to clone public repositories so that I can inspect open-source code without creating an account.
+
+### Ubiquitous Requirements (Anonymous Access Properties)
+
+- **REPO-13-001:** `The system shall permit unauthenticated git-upload-pack requests against any public repository (visibility = public, not private or limited).`
+- **REPO-13-002:** `The system shall reject all unauthenticated git-receive-pack requests regardless of repository visibility.`
+- **REPO-13-003:** `The system shall treat any anonymous clone as if performed by a user with read-only permission.`
+
+### Event-Driven Requirements (Anonymous Access Workflow)
+
+- **REPO-13-101:** `When an unauthenticated client initiates git-upload-pack on a public repository, the system shall serve the repository without prompting for credentials.`
+- **REPO-13-102:** `When an unauthenticated client initiates a Git operation on a private or limited-visibility repository, the system shall challenge with HTTP 401 and request credentials.`
+- **REPO-13-103:** `When the organization owning a public repository has been marked as not publicly visible, the system shall reject anonymous pulls of that organization's repositories.`
+
+### Optional Feature Requirements (Anonymous Access Configuration)
+
+- **REPO-13-201:** `Where DISABLE_HTTP_GIT is enabled, the system shall reject all anonymous Git HTTP operations regardless of repository visibility.`
+- **REPO-13-202:** `Where REQUIRE_SIGNIN_VIEW is enabled, the system shall reject anonymous access to all web and Git HTTP endpoints.`
+
+### Unwanted Behaviour Requirements (Anonymous Access Errors)
+
+- **REPO-13-301:** `If an anonymous client requests git-receive-pack, then the system shall respond with HTTP 401 Unauthorized.`
+- **REPO-13-302:** `If an anonymous client attempts to access an archived public repository for write, then the system shall reject the request.`
+- **REPO-13-303:** `If an anonymous pull exceeds the configured per-IP rate limit, then the system shall apply backpressure or reject subsequent requests.`
+
+---
+
+## 14. Repository Transfer (REPO-14)
+
+**User Story:** As a repository owner, I want to transfer ownership of a repository to another user or organization so that responsibility for the repository changes hands cleanly.
+
+### Ubiquitous Requirements (Transfer Properties)
+
+- **REPO-14-001:** `The system shall track pending repository transfers as a distinct state with initiator, recipient, and target teams.`
+- **REPO-14-002:** `The system shall require explicit acceptance by the recipient before a transfer completes.`
+- **REPO-14-003:** `The system shall create a persistent redirect from the old repository path to the new path upon completion.`
+- **REPO-14-004:** `The system shall preserve all issues, pull requests, releases, wiki content, and settings across the transfer.`
+
+### Event-Driven Requirements (Transfer Workflow)
+
+- **REPO-14-101:** `When an owner initiates a transfer to a recipient, the system shall create a pending transfer record and notify the recipient.`
+- **REPO-14-102:** `When the recipient accepts the transfer, the system shall reassign repository ownership, update paths, and create a redirect.`
+- **REPO-14-103:** `When the recipient rejects the transfer, the system shall cancel the pending record and notify the initiator.`
+- **REPO-14-104:** `When the initiator cancels a pending transfer, the system shall remove the pending record.`
+- **REPO-14-105:** `When the recipient accepts a transfer to an organization and the initiator specified target teams, the system shall grant those teams access to the transferred repository.`
+- **REPO-14-106:** `When a transfer completes, the system shall transfer all deploy keys, webhooks, and per-repository configuration to the new owner.`
+
+### State-Driven Requirements (Pending Transfer)
+
+- **REPO-14-701:** `While a transfer is pending, the system shall continue serving the repository from the original path.`
+- **REPO-14-702:** `While a transfer is pending, the system shall block the initiator from deleting the repository.`
+
+### Unwanted Behaviour Requirements (Transfer Errors)
+
+- **REPO-14-301:** `If the recipient does not have permission to own repositories of the requested visibility, then the system shall reject the acceptance.`
+- **REPO-14-302:** `If a non-owner attempts to initiate or cancel a transfer, then the system shall deny the operation.`
+- **REPO-14-303:** `If the recipient namespace already contains a repository with the same name, then the system shall reject the acceptance.`
+- **REPO-14-304:** `If the recipient rejects the transfer after the initiator has lost ownership (e.g. account deletion), then the system shall preserve the repository under a ghost owner.`
+
+---
+
+## 15. Branch Rename & Restore (REPO-15)
+
+**User Story:** As a maintainer, I want to rename branches and restore deleted branches so that I can recover from mistakes and reorganize branch structure.
+
+### Ubiquitous Requirements (Branch Rename Properties)
+
+- **REPO-15-001:** `The system shall support renaming any branch in a repository.`
+- **REPO-15-002:** `The system shall create a redirect from the old branch name to the new branch name after rename.`
+- **REPO-15-003:** `The system shall support restoring recently-deleted branches from their reflog entries.`
+
+### Event-Driven Requirements (Branch Lifecycle)
+
+- **REPO-15-101:** `When a user renames a branch, the system shall update the ref, create a redirect, and update all internal references including default-branch pointer if applicable.`
+- **REPO-15-102:** `When a user renames the default branch, the system shall update the repository's HEAD reference atomically.`
+- **REPO-15-103:** `When a user requests restoration of a deleted branch, the system shall resurrect the ref from the most recent reflog entry.`
+- **REPO-15-104:** `When a user restores a branch via the deleted-branches UI, the system shall recreate the ref and any associated branch-protection rules.`
+
+### Optional Feature Requirements (Rename Constraints)
+
+- **REPO-15-201:** `Where a branch is protected, the system shall require admin permission to rename it.`
+- **REPO-15-202:** `Where a renamed branch is referenced by open pull requests, the system shall update the PR base or head references accordingly.`
+
+### Unwanted Behaviour Requirements (Branch Rename Errors)
+
+- **REPO-15-301:** `If a user attempts to rename a branch to a name that already exists, then the system shall reject the rename.`
+- **REPO-15-302:** `If a non-admin user attempts to rename a protected branch, then the system shall deny the operation.`
+- **REPO-15-303:** `If a user attempts to restore a branch whose reflog entry has expired, then the system shall report that no restorable state exists.`
+
+---
+
+## 16. Repository Activity (REPO-16)
+
+**User Story:** As a maintainer, I want a per-repository activity dashboard so that I can see contribution trends, code frequency, and recent commits at a glance.
+
+### Ubiquitous Requirements (Activity Properties)
+
+- **REPO-16-001:** `The system shall provide an Activity tab on each repository exposing time-bucketed contribution views.`
+- **REPO-16-002:** `The system shall render a contributors view showing per-author commit, addition, and deletion counts.`
+- **REPO-16-003:** `The system shall render a code-frequency chart showing cumulative additions versus deletions over time.`
+- **REPO-16-004:** `The system shall render a recent-commits view showing commit frequency per time bucket.`
+
+### Event-Driven Requirements (Activity Workflow)
+
+- **REPO-16-101:** `When a user navigates to /{owner}/{repo}/activity, the system shall render the activity dashboard for the default time window.`
+- **REPO-16-102:** `When a user selects a time period (daily, weekly, monthly), the system shall re-bucket and re-render the activity charts.`
+- **REPO-16-103:** `When a client requests /{owner}/{repo}/activity/code-frequency/data, the system shall return the code-frequency series as JSON.`
+- **REPO-16-104:** `When a client requests /{owner}/{repo}/activity/recent-commits/data, the system shall return the recent-commits series as JSON.`
+- **REPO-16-105:** `When a user navigates to /{owner}/{repo}/activity/authors, the system shall render the contributor breakdown with author filtering.`
+
+### Optional Feature Requirements (Activity Configuration)
+
+- **REPO-16-201:** `Where the repository is empty, the system shall display an empty-state message in place of activity charts.`
+- **REPO-16-202:** `Where the user lacks read access to a private repository, the system shall return 404 for activity routes.`
+
+### Unwanted Behaviour Requirements (Activity Errors)
+
+- **REPO-16-301:** `If the activity data exceeds the maximum rendering window, then the system shall truncate to the most recent N buckets.`
+- **REPO-16-302:** `If the activity data endpoint is requested with an invalid time bucket size, then the system shall return 400 Bad Request.`
+
+---
+
+## Configuration Reference
+
+The following INI sections configure code-management behaviors.
+
+### [git] Section
+
+- **PATH**: Path to the git binary (default `git`).
+- **HOME_PATH**: Home directory used for git operations.
+- **DISABLE_DIFF_DIFF_TEXT**: Disable textual diff in web UI.
+- **MAX_GIT_DIFF_LINES**: Maximum lines per diff file before truncation (default 1000).
+- **MAX_GIT_DIFF_LINE_CHARACTERS**: Maximum characters per diff line (default 5000).
+- **MAX_GIT_DIFF_FILES**: Maximum files shown in a diff before truncation (default 100).
+- **COMMITS_FETCH_SIZE**: Number of commits to fetch per batch.
+- **VERBOSE_PUSH**: Render verbose push output when enabled.
+- **VERBOSE_PUSH_TIMEOUT**: Timeout for verbose push operations (seconds).
+- **CONCURRENT_CREATION_LIMIT**: Maximum concurrent git repository creation operations.
+- **CONCURRENT_MIGRATION_LIMIT**: Maximum concurrent migration operations.
+- **GC_ARGS**: Arguments passed to `git gc` when invoked by Gitea.
+- **TIMEOUT_MIGRATE**: Migration timeout (seconds, default 600).
+- **TIMEOUT_CLONE**: Clone timeout (seconds, default 300).
+- **TIMEOUT_PULL**: Pull timeout (seconds, default 300).
+- **TIMEOUT_GC**: GC timeout (seconds, default 60).
+- **ENABLE_AUTO_GIT_WIKI**: Auto-initialize git wiki on first access.
+
+### [git.config] Section
+
+Arbitrary `key=value` pairs written to the git config of each repository. Examples:
+- **diff.algorithm**
+- **core.logAllRefUpdates**
+- **receive.advertisePushOptions**
+
+### [git.reflog] Section
+
+- **ENABLE**: Enable reflog retention on Gitea-managed repositories.
+- **EXPIRE**: Reflog expiry duration (default `90d`).
+- **EXPIRE_UNREACHABLE**: Expiry for unreachable reflog entries (default `30d`).
+
+### [repository.upload] Section
+
+- **ENABLED**: Enable file uploads in the web editor.
+- **TEMP_PATH**: Temporary upload staging path.
+- **ALLOWED_TYPES**: Comma-separated MIME type allowlist for uploads (default empty = allow all).
+- **FILE_MAX_SIZE**: Maximum upload file size in MB (default 3).
+- **MAX_FILES**: Maximum files per single upload batch (default 5).
+
+### [repository.local] Section
+
+- **LOCAL_COPY_PATH**: Path used for staging local working copies during web-editor operations.
+
+### [repository.pull-request] Section
+
+- **WORK_IN_PROGRESS_PREFIXES**: Comma-separated title prefixes treated as WIP markers (default `WIP:,[WIP]`).
+- **CLOSE_KEYWORDS**: Comma-separated keywords that auto-close issues when used in PR body or merge commit.
+- **REOPEN_KEYWORDS**: Comma-separated keywords that auto-reopen issues.
+
+---
+
 ## Business Rules
 
 - **BR-04-001:** Repository names must be unique within an owner's namespace (case-insensitive)

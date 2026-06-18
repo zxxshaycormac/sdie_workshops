@@ -330,6 +330,127 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 ---
 
+## 11. CODEOWNERS (COLL-11)
+
+**User Story:** As a maintainer, I want to define code owners for repository paths so that pull requests touching those paths automatically request reviews from the right people.
+
+#### Ubiquitous Requirements (CODEOWNERS Properties)
+
+- **COLL-11-001:** `The system shall recognize a CODEOWNERS file at any of the following paths: ./CODEOWNERS, ./docs/CODEOWNERS, ./.github/CODEOWNERS, ./.gitea/CODEOWNERS.`
+- **COLL-11-002:** `The system shall parse CODEOWNERS rules as path-glob patterns mapped to one or more owner entries.`
+- **COLL-11-003:** `The system shall resolve owner entries as individual usernames, team slugs (for organization repositories), or email addresses.`
+- **COLL-11-004:** `The system shall apply the last matching rule when multiple CODEOWNERS rules match the same path.`
+
+#### Event-Driven Requirements (CODEOWNERS Workflow)
+
+- **COLL-11-101:** `When a pull request is opened or updated, the system shall compute the set of paths changed in the diff.`
+- **COLL-11-102:** `When changed paths match CODEOWNERS rules, the system shall collect the owners for those paths.`
+- **COLL-11-103:** `When owners are collected for a pull request, the system shall request reviews from individual owners and from team owners for organization repositories.`
+- **COLL-11-104:** `When a user views the CODEOWNERS file, the system shall render the file content with rule highlighting in the repository browser.`
+
+#### Optional Feature Requirements (CODEOWNERS Configuration)
+
+- **COLL-11-201:** `Where a branch protection rule requires CODEOWNERS review, the system shall block merge until every CODEOWNERS rule covering the diff has an approving review from at least one owner.`
+- **COLL-11-202:** `Where a CODEOWNERS rule references a team that does not exist in the organization, the system shall skip that team and continue resolving other owners.`
+
+#### Unwanted Behaviour Requirements (CODEOWNERS Errors)
+
+- **COLL-11-301:** `If a CODEOWNERS file contains a malformed glob pattern, then the system shall skip the offending rule and log a warning.`
+- **COLL-11-302:** `If a CODEOWNERS rule references a user who lacks read access to the repository, then the system shall not request a review from that user.`
+- **COLL-11-303:** `If a pull request touches paths not covered by any CODEOWNERS rule, then the system shall not add any owner-based review requests.`
+
+---
+
+## 12. Issue Close Keywords & Commit References (COLL-12)
+
+**User Story:** As a developer, I want commits that mention an issue (e.g., "closes #42") to auto-close the issue so that work is tracked without manual bookkeeping.
+
+#### Ubiquitous Requirements (Reference Properties)
+
+- **COLL-12-001:** `The system shall parse cross-references of the forms #N, owner/repo#N, group/project!N, and full URLs in issue, PR, and commit text.`
+- **COLL-12-002:** `The system shall store each cross-reference as a tracked relation between the source and target entities.`
+- **COLL-12-003:** `The system shall render recognized cross-references as hyperlinks in markdown-rendered output.`
+- **COLL-12-004:** `The system shall recognize the close-action keywords "close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", and "resolved" when immediately followed by a cross-reference.`
+
+#### Event-Driven Requirements (Reference Workflow)
+
+- **COLL-12-101:** `When a commit message or PR body contains a close keyword followed by a cross-reference, the system shall record the close-action intent.`
+- **COLL-12-102:** `When a commit bearing a close-action intent is pushed to the default branch, the system shall close the referenced issue and post a closing-event comment.`
+- **COLL-12-103:** `When a PR is merged and the PR body or any commit in the merge set contains a close-action keyword, the system shall close all referenced issues.`
+- **COLL-12-104:** `When a cross-reference is created from one issue to another, the system shall post a "linked" comment on the target issue.`
+- **COLL-12-105:** `When a commit references an issue without a close keyword, the system shall record the reference but shall not change the issue state.`
+
+#### State-Driven Requirements (Reference Resolution)
+
+- **COLL-12-701:** `While the referenced issue belongs to a different repository than the referencing commit, the system shall only resolve the reference if the pushing user has write access to the target repository.`
+
+#### Unwanted Behaviour Requirements (Reference Errors)
+
+- **COLL-12-301:** `If a close keyword references an issue number that does not exist, then the system shall log the miss and take no action.`
+- **COLL-12-302:** `If a close keyword references an already-closed issue, then the system shall record the reference but not post a duplicate closing event.`
+- **COLL-12-303:** `If the pushing user lacks write access to the target repository of the close reference, then the system shall record the reference but not close the issue.`
+
+---
+
+## 13. PR Review Workflow (COLL-13)
+
+**User Story:** As a reviewer, I want to mark files as viewed, dismiss stale reviews, and request specific reviewers so that the review process is structured and auditable.
+
+#### Ubiquitous Requirements (Review Workflow Properties)
+
+- **COLL-13-001:** `The system shall track per-user, per-commit viewed-file state for each open pull request.`
+- **COLL-13-002:** `The system shall allow requesting individual users and entire teams as reviewers on organization-owned pull requests.`
+- **COLL-13-003:** `The system shall allow dismissal of an existing review with a recorded reason.`
+- **COLL-13-004:** `The system shall support three formal review verdicts: approve, request-changes, and comment.`
+
+#### Event-Driven Requirements (Review Workflow)
+
+- **COLL-13-101:** `When a reviewer marks a file as viewed in a PR, the system shall persist the viewed state keyed by user, file path, and head SHA.`
+- **COLL-13-102:** `When a previously viewed file is modified by a new commit on the PR, the system shall mark the file as changed and prompt re-review.`
+- **COLL-13-103:** `When a user requests a review from a specific user, the system shall notify the requested reviewer and create a pending review record.`
+- **COLL-13-104:** `When an organization owner requests a review from a team, the system shall request review from every team member.`
+- **COLL-13-105:** `When an authorized user dismisses a review, the system shall mark the review as dismissed, store the dismissal reason, and post a timeline event.`
+- **COLL-13-106:** `When a reviewer submits an approve verdict on a PR with pending request-changes reviews, the system shall replace the prior blocking review with the approval.`
+
+#### State-Driven Requirements (Stale Review Handling)
+
+- **COLL-13-701:** `While stale-approval dismissal is enabled on the protected branch and a new commit is pushed to the PR head, the system shall dismiss all existing approvals and require re-review.`
+
+#### Unwanted Behaviour Requirements (Review Workflow Errors)
+
+- **COLL-13-301:** `If a non-collaborator attempts to dismiss a review, then the system shall deny the operation.`
+- **COLL-13-302:** `If a user attempts to request a reviewer who is blocked by the repository owner, then the system shall deny the request.`
+- **COLL-13-303:** `If a user attempts to request themselves as a reviewer, then the system shall reject the request.`
+- **COLL-13-304:** `If a user requests a team review on a non-organization repository, then the system shall reject the request.`
+
+---
+
+## 14. Issue & Comment Content History Browser (COLL-14)
+
+**User Story:** As a collaborator, I want to view the edit history of issue bodies and comments so that I can see what was changed and restore prior content if needed.
+
+#### Ubiquitous Requirements (Content History Properties)
+
+- **COLL-14-001:** `The system shall record a content-history entry for every edit to an issue body or comment body.`
+- **COLL-14-002:** `The system shall store per-entry: author, timestamp, previous content hash, and new content hash.`
+- **COLL-14-003:** `The system shall retain soft-deleted history entries distinct from hard-deleted entries.`
+
+#### Event-Driven Requirements (Content History Workflow)
+
+- **COLL-14-101:** `When a user edits an issue or comment body, the system shall create a new content-history entry with the previous content snapshot.`
+- **COLL-14-102:** `When a user opens the content-history overview for an issue or comment, the system shall render the list of edits with author and timestamp.`
+- **COLL-14-103:** `When a user selects a specific history entry, the system shall render the diff between the previous and current content.`
+- **COLL-14-104:** `When a user with write permission soft-deletes a history entry, the system shall hide the entry from the public list but retain the data.`
+- **COLL-14-105:** `When an admin restores a prior content version, the system shall create a new edit applying the prior content as the current body.`
+
+#### Unwanted Behaviour Requirements (Content History Errors)
+
+- **COLL-14-301:** `If a non-collaborator attempts to view content history, then the system shall deny access with 403.`
+- **COLL-14-302:** `If a user attempts to soft-delete a history entry they did not author, then the system shall deny the operation unless the user is an admin or repo owner.`
+- **COLL-14-303:** `If a restore operation would conflict with newer edits, then the system shall warn the user and offer to create a new edit instead of overwriting.`
+
+---
+
 ## Business Rules
 
 - **BR-02-001:** Issue and PR numbers share a single sequential counter per repository and are never reused after deletion.

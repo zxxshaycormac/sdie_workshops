@@ -229,6 +229,36 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 ---
 
+## 8. Search Candidates Autocomplete (SRCH-08)
+
+**User Story:** As an issue author, I want a fast typeahead search when I @mention a user or pick an assignee so that I can find the right person without leaving the form.
+
+### Ubiquitous Requirements (Autocomplete Properties)
+
+- **SRCH-08-001:** `The system shall expose a /user/search_candidates endpoint optimized for low-latency typeahead responses.`
+- **SRCH-08-002:** `The system shall support two search modes: mention (for @-prefixed completions) and assignee (for collaborator selection).`
+- **SRCH-08-003:** `The system shall return matching user ID, login name, full name, and avatar URL in the response payload.`
+- **SRCH-08-004:** `The system shall scope assignee-mode searches to users with write access to the contextual repository.`
+
+### Event-Driven Requirements (Autocomplete Workflow)
+
+- **SRCH-08-101:** `When a user types into a @mention field with at least 2 characters, the system shall query matching users and return up to 10 suggestions within 200ms.`
+- **SRCH-08-102:** `When a user opens an assignee picker on a repository, the system shall return collaborators and team members filtered by the user's read access.`
+- **SRCH-08-103:** `When a typeahead query is submitted for a private repository, the system shall only return users the requester is permitted to see.`
+- **SRCH-08-104:** `When the requester lacks read access to the contextual repository, the system shall return 404 to avoid leaking existence.`
+
+### Optional Feature Requirements (Autocomplete Configuration)
+
+- **SRCH-08-201:** `Where an organization restricts member visibility, the system shall only return concealed members to viewers with explicit permission.`
+
+### Unwanted Behaviour Requirements (Autocomplete Errors)
+
+- **SRCH-08-301:** `If a query would match more than the configured maximum number of users, then the system shall truncate the result and not signal incompleteness to avoid enumeration.`
+- **SRCH-08-302:** `If the requester includes a blocked user in their results, then the system shall exclude that user silently.`
+- **SRCH-08-303:** `If the query string is shorter than the minimum threshold, then the system shall return an empty result set without querying the database.`
+
+---
+
 ## Business Rules
 
 - **BR-08-001:** Repository search applies visibility scoping based on the authenticated user's permissions

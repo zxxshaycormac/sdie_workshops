@@ -376,6 +376,162 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 ---
 
+## 13. OAuth2 Client Login (INT-13)
+
+**User Story:** As a user, I want to sign in to Gitea with my GitHub, GitLab, Google, or other external account so that I do not need a separate Gitea password.
+
+### Ubiquitous Requirements (OAuth2 Client Properties)
+
+- **INT-13-001:** `The system shall implement the OAuth2 authorization-code flow as a client against configured external providers.`
+- **INT-13-002:** `The system shall support per-provider configuration of client ID, client secret, authorization endpoints, token endpoints, profile endpoints, and scopes.`
+- **INT-13-003:** `The system shall map the external profile fields (username, email, full name, avatar URL) to local account attributes using configurable attribute mapping.`
+- **INT-13-004:** `The system shall treat OAuth2 client login as one of the AUTH-06 authentication source types.`
+
+### Event-Driven Requirements (OAuth2 Client Workflow)
+
+- **INT-13-101:** `When a user clicks the provider button on the login page, the system shall redirect the user to the provider's authorization endpoint.`
+- **INT-13-102:** `When the provider redirects back with an authorization code, the system shall exchange the code for an access token using the configured client secret.`
+- **INT-13-103:** `When the access token is obtained, the system shall call the provider's profile endpoint to fetch the external user identity.`
+- **INT-13-104:** `When the external identity matches an existing local account, the system shall authenticate the user as that account.`
+- **INT-13-105:** `When the external identity does not match an existing local account and OAuth2 auto-registration is enabled, the system shall create a new local account linked to the external identity.`
+- **INT-13-106:** `When a user is already authenticated and chooses to link an additional external provider, the system shall record the link without creating a new local account.`
+
+### Optional Feature Requirements (OAuth2 Client Configuration)
+
+- **INT-13-201:** `Where OAuth2 auto-registration is disabled and the external identity has no matching local account, the system shall prompt the user to either sign in to an existing local account or stop the flow.`
+- **INT-13-202:** `Where the provider returns an unverified email and email verification is required, the system shall refuse to create a local account and prompt the user to verify the email with the provider first.`
+- **INT-13-203:** `Where two-factor authentication bypass is enabled for an OAuth2 source, the system shall skip local 2FA for users authenticating through that source.`
+
+### Unwanted Behaviour Requirements (OAuth2 Client Errors)
+
+- **INT-13-301:** `If the provider returns an invalid or expired authorization code, then the system shall reject the login with an error message and return the user to the login page.`
+- **INT-13-302:** `If the provider's profile endpoint is unreachable, then the system shall log the error and report a temporary authentication failure.`
+- **INT-13-303:** `If the external identity's username collides with a local username not yet linked to that provider, then the system shall reject the auto-registration and prompt for a different username.`
+- **INT-13-304:** `If the provider's email domain is on the configured blocklist, then the system shall reject the auto-registration.`
+
+---
+
+## 14. Camo / Image Proxy (INT-14)
+
+**User Story:** As an administrator, I want external images rendered in issues and comments to be proxied through Gitea so that user IP addresses are not leaked to third-party image hosts.
+
+### Ubiquitous Requirements (Camo Properties)
+
+- **INT-14-001:** `The system shall rewrite external image URLs in rendered markdown content to route through the configured camo proxy URL.`
+- **INT-14-002:** `The system shall preserve the original URL as an encrypted or HMAC-signed query parameter so the proxy can fetch the original resource.`
+- **INT-14-003:** `The system shall leave relative URLs, same-origin URLs, and URLs matching the configured bypass patterns unchanged.`
+
+### Event-Driven Requirements (Camo Workflow)
+
+- **INT-14-101:** `When the system renders markdown containing an external image URL and camo is enabled, the system shall rewrite the URL to the camo proxy prefix.`
+- **INT-14-102:** `When the camo proxy is configured with a shared secret, the system shall include an HMAC signature of the original URL in the rewritten request.`
+- **INT-14-103:** `When the system renders markdown with camo disabled, the system shall emit the original image URL unchanged.`
+
+### Optional Feature Requirements (Camo Configuration)
+
+- **INT-14-201:** `Where camo is enabled, the system shall rewrite all non-same-origin image URLs by default.`
+- **INT-14-202:** `Where camo is disabled (default), the system shall emit external image URLs as-is.`
+- **INT-14-203:** `Where a camo bypass list is configured, the system shall skip rewriting for URLs whose host matches the bypass list.`
+
+### Unwanted Behaviour Requirements (Camo Errors)
+
+- **INT-14-301:** `If camo is enabled but the camo proxy URL is not configured, then the system shall fall back to emitting original URLs and log a warning.`
+- **INT-14-302:** `If the camo proxy returns an error for a given image, then the browser shall display a broken-image indicator; the system shall not retry inline.`
+- **INT-14-303:** `If an image URL fails parsing, then the system shall leave the URL unchanged rather than emit a malformed proxy URL.`
+
+---
+
+## 15. Server-Sent Events (INT-15)
+
+**User Story:** As a browser client, I want a persistent event stream so that I receive real-time updates (notifications, status changes) without polling.
+
+### Ubiquitous Requirements (SSE Properties)
+
+- **INT-15-001:** `The system shall expose a /user/events endpoint delivering server-sent events over a persistent HTTP connection.`
+- **INT-15-002:** `The system shall frame each event with the SSE wire format: a leading event: line, a data: line, and a blank-line terminator.`
+- **INT-15-003:** `The system shall send periodic heartbeat comments to keep intermediary proxies from closing idle connections.`
+- **INT-15-004:** `The system shall scope every event payload to the authenticated user's notifications, mentions, status changes, and timeline activity.`
+
+### Event-Driven Requirements (SSE Workflow)
+
+- **INT-15-101:** `When a browser opens /user/events with a valid session, the system shall register the connection with the per-user eventsource manager.`
+- **INT-15-102:** `When an event of interest to the user occurs (notification, status change), the system shall push the event to every open SSE connection for that user.`
+- **INT-15-103:** `When the browser closes the connection, the system shall deregister the connection and free associated resources.`
+- **INT-15-104:** `When the server shuts down, the system shall close every open SSE connection with a finalizing event before terminating.`
+
+### State-Driven Requirements (SSE Lifecycle)
+
+- **INT-15-701:** `While a user has multiple browser sessions open, the system shall deliver every event to each session independently.`
+- **INT-15-702:** `While a user's session expires, the system shall close the SSE connection and require re-authentication.`
+
+### Unwanted Behaviour Requirements (SSE Errors)
+
+- **INT-15-301:** `If an unauthenticated client requests /user/events, then the system shall return HTTP 401.`
+- **INT-15-302:** `If a single user exceeds the configured maximum concurrent SSE connections, then the system shall reject additional connections with HTTP 429.`
+- **INT-15-303:** `If an event payload cannot be serialized, then the system shall log the error and skip the event rather than close the connection.`
+
+---
+
+## 16. RSS & Atom Feeds (INT-16)
+
+**User Story:** As a user or feed reader, I want RSS and Atom feeds for repository activity, releases, tags, branches, and user activity so that I can monitor projects from my feed reader.
+
+### Ubiquitous Requirements (Feed Properties)
+
+- **INT-16-001:** `The system shall expose RSS (.rss) and Atom (.atom) variants for every supported feed.`
+- **INT-16-002:** `The system shall support feeds for: user activity, repository commits, repository releases, repository tags, and per-branch commits.`
+- **INT-16-003:** `The system shall include the most recent N entries (configurable) per feed, each with title, link, summary, author, and updated timestamp.`
+- **INT-16-004:** `The system shall honor the If-Modified-Since header and return HTTP 304 when no entries have changed since the supplied timestamp.`
+
+### Event-Driven Requirements (Feed Workflow)
+
+- **INT-16-101:** `When a client requests GET /{username}.rss or .atom, the system shall return the user's public activity feed filtered by visibility.`
+- **INT-16-102:** `When a client requests GET /{owner}/{repo}/commits/{branch}.rss or .atom, the system shall return the per-branch commit feed.`
+- **INT-16-103:** `When a client requests GET /{owner}/{repo}/releases/.rss or .atom, the system shall return the release feed scoped to non-draft releases.`
+- **INT-16-104:** `When a client requests GET /{owner}/{repo}/tags/.rss or .atom, the system shall return the tag feed.`
+- **INT-16-105:** `When a client requests a feed for a private repository, the system shall require authentication and scope entries to the requester's permission level.`
+
+### Optional Feature Requirements (Feed Configuration)
+
+- **INT-16-201:** `Where feeds are disabled via configuration, the system shall return HTTP 404 for all feed routes.`
+- **INT-16-202:** `Where a feed is requested with a ?limit query parameter below the maximum, the system shall honor the requested limit.`
+
+### Unwanted Behaviour Requirements (Feed Errors)
+
+- **INT-16-301:** `If an unauthenticated client requests a private repository's feed, then the system shall return HTTP 404 to avoid leaking repository existence.`
+- **INT-16-302:** `If a feed references a non-existent user, repository, branch, or tag, then the system shall return HTTP 404.`
+- **INT-16-303:** `If a feed entry references content that has since been deleted, then the system shall exclude the entry from the response.`
+
+---
+
+## Configuration Reference
+
+The following INI sections configure integration and extension behaviors.
+
+### [ssh.minimum_key_sizes] Section
+
+Per-key-type minimum bit-length policy enforced when a user registers an SSH key.
+- **ED25519**: Minimum bits for ED25519 keys (default 0 = unset).
+- **ECDSA**: Minimum bits for ECDSA keys (default 256).
+- **RSA**: Minimum bits for RSA keys (default 2048).
+- **DSA**: Minimum bits for DSA keys (default 1024).
+
+### [time] Section
+
+- **FORMAT**: Golang time-layout string for display (default `RFC1123`).
+- **LOCATION**: Default timezone for the instance (default `Local`).
+
+### [markup.*] Section (per-renderer)
+
+Each external renderer is configured as a `[markup.<name>]` section.
+- **ENABLED**: Activate this renderer.
+- **FILE_EXTENSIONS**: Comma-separated extensions handled by this renderer.
+- **RENDER_COMMAND**: External command to execute on file content.
+- **IS_INPUT_FILE**: Whether the renderer takes a filename (true) or stdin (false).
+- **RENDER_CONTENT_MODE**: How output is wrapped (`sanitized`, `no-sanitizer`, `image`).
+
+---
+
 ## Business Rules
 
 - **BR-09-001:** The REST API is always served under /api/v1; no other version paths are recognized

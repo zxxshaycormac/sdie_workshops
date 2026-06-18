@@ -141,6 +141,12 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-04-302:** `If a non-author or non-admin user attempts to schedule auto-merge, then the system shall deny the operation.`
 - **CI-04-303:** `If the head SHA at merge time differs from the scheduled SHA and no new push has occurred, then the system shall abort the merge.`
 
+### Event-Driven Requirements (Auto-merge Management)
+
+- **CI-04-201:** `When a user cancels a scheduled auto-merge, the system shall remove the pending schedule and post a cancellation comment on the PR.`
+- **CI-04-202:** `When a user toggles the "allow maintainer edit" flag on a PR, the system shall grant or revoke write permission to the PR's head branch for repository maintainers.`
+- **CI-04-203:** `When the PR author disables maintainer edit, the system shall revoke previously granted maintainer push access to the head branch.`
+
 ---
 
 ## 5. Commit Status
@@ -273,6 +279,140 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-08-301:** `If a queue backend becomes unavailable, then the system shall log the error and queue new items in memory until the backend recovers.`
 - **CI-08-302:** `If a worker panics during item processing, then the system shall recover the worker and requeue the item.`
 - **CI-08-303:** `If a LevelDB queue data directory is corrupted, then the system shall log the error and start with a fresh queue.`
+
+---
+
+## 9. Actions Secrets (CI-09)
+
+**User Story:** As a repository administrator, I want to store encrypted secrets (deployment tokens, signing keys) at the repository, organization, or user level so that workflows can use them without exposing the values in logs or code.
+
+### Ubiquitous Requirements (Secret Properties)
+
+- **CI-09-001:** `The system shall support Actions secrets at three scopes: repository, organization, and user.`
+- **CI-09-002:** `The system shall encrypt secret values at rest using the instance secret key.`
+- **CI-09-003:** `The system shall expose secret values to workflow jobs only via the secrets runtime context.`
+- **CI-09-004:** `The system shall mask secret values in workflow run logs when the value appears in command output.`
+
+### Event-Driven Requirements (Secret Workflow)
+
+- **CI-09-101:** `When an authorized user submits a new secret at repository, organization, or user scope, the system shall encrypt the value and store it under the chosen name.`
+- **CI-09-102:** `When a workflow job references a secret by name, the system shall inject the resolved secret into the job environment only after resolving the precedence: repository, then organization, then user.`
+- **CI-09-103:** `When an authorized user updates an existing secret, the system shall overwrite the encrypted value without retaining the previous value.`
+- **CI-09-104:** `When an authorized user deletes a secret, the system shall remove the encrypted record immediately.`
+- **CI-09-105:** `When a workflow run completes, the system shall not persist secret values in the run log storage.`
+
+### Optional Feature Requirements (Secret Scope Inheritance)
+
+- **CI-09-201:** `Where an organization-level secret has the same name as a repository-level secret, the system shall use the repository-level secret for workflow runs in that repository.`
+- **CI-09-202:** `Where a secret is configured at user scope, the system shall make the secret available to workflows running in repositories owned by that user.`
+
+### Unwanted Behaviour Requirements (Secret Errors)
+
+- **CI-09-301:** `If a workflow run is triggered from a fork pull request, then the system shall restrict access to repository and organization secrets unless the maintainer has explicitly approved the run.`
+- **CI-09-302:** `If a secret name contains characters other than alphanumeric or underscore, then the system shall reject the secret creation with a validation error.`
+- **CI-09-303:** `If an unauthorized user attempts to view, create, or delete a secret, then the system shall deny the operation with 403 Forbidden.`
+- **CI-09-304:** `If a workflow references a secret name that is not defined at any scope, then the system shall substitute an empty string for the secret value and continue the run.`
+
+---
+
+## 10. Actions Variables (CI-10)
+
+**User Story:** As a repository administrator, I want to store non-sensitive configuration values (build flags, image tags) at the repository, organization, or user level so that workflows can reference them without duplicating the values across files.
+
+### Ubiquitous Requirements (Variable Properties)
+
+- **CI-10-001:** `The system shall support Actions variables at three scopes: repository, organization, and user.`
+- **CI-10-002:** `The system shall store variable values in plaintext.`
+- **CI-10-003:** `The system shall expose variable values to workflow jobs and workflow-file parsing via the vars runtime context.`
+- **CI-10-004:** `The system shall display variable values unmasked in the management UI because variables are not intended to hold secrets.`
+
+### Event-Driven Requirements (Variable Workflow)
+
+- **CI-10-101:** `When an authorized user creates a variable, the system shall store the value and make it resolvable from workflow YAML via the vars context.`
+- **CI-10-102:** `When a workflow run parses YAML, the system shall substitute ${{ vars.NAME }} expressions using the resolved variable value.`
+- **CI-10-103:** `When an authorized user updates a variable, the system shall apply the change to all subsequent workflow runs without affecting in-flight runs.`
+- **CI-10-104:** `When resolving a variable name that exists at multiple scopes, the system shall apply the precedence: repository, then organization, then user.`
+
+### Optional Feature Requirements (Variable Scope Inheritance)
+
+- **CI-10-201:** `Where a repository-level variable shadows an organization-level variable of the same name, the system shall use the repository-level value for runs in that repository.`
+- **CI-10-202:** `Where a user-level variable is defined, the system shall make the variable available to workflow runs in repositories owned by that user.`
+
+### Unwanted Behaviour Requirements (Variable Errors)
+
+- **CI-10-301:** `If a variable name contains characters other than alphanumeric or underscore, then the system shall reject the variable creation with a validation error.`
+- **CI-10-302:** `If a workflow references an undefined variable, then the system shall substitute an empty string and continue the run.`
+- **CI-10-303:** `If an unauthorized user attempts to view, create, or delete a variable, then the system shall deny the operation with 403 Forbidden.`
+
+---
+
+## 11. Actions Artifacts (CI-11)
+
+**User Story:** As a workflow author, I want to upload artifacts (build outputs, test reports) during a workflow run and download them later so that I can share build outputs with consumers.
+
+### Ubiquitous Requirements (Artifact Properties)
+
+- **CI-11-001:** `The system shall store artifacts scoped to a specific workflow run.`
+- **CI-11-002:** `The system shall enforce a configurable retention period (default 90 days) after which artifacts are deleted.`
+- **CI-11-003:** `The system shall provide UI and API endpoints for listing, downloading, and deleting artifacts.`
+- **CI-11-004:** `The system shall store artifacts in the configured actions_artifact storage backend.`
+
+### Event-Driven Requirements (Artifact Workflow)
+
+- **CI-11-101:** `When a workflow job calls the artifact upload action, the system shall persist the artifact under a unique name scoped to the run.`
+- **CI-11-102:** `When a workflow job calls the artifact download action, the system shall serve the named artifact from the same run or a previously-completed run.`
+- **CI-11-103:** `When a user navigates to a workflow run's artifacts tab, the system shall list every artifact uploaded by the run.`
+- **CI-11-104:** `When a user clicks an artifact in the UI, the system shall stream a zip archive of the artifact contents.`
+- **CI-11-105:** `When an authorized user deletes an artifact via the UI or API, the system shall remove the artifact immediately.`
+
+### State-Driven Requirements (Artifact Retention)
+
+- **CI-11-701:** `While an artifact has not reached the retention limit, the system shall keep it accessible for download.`
+- **CI-11-702:** `While the configured storage backend is unreachable, the system shall fail artifact upload/download operations with a storage error and not corrupt existing artifacts.`
+
+### Optional Feature Requirements (Artifact Configuration)
+
+- **CI-11-201:** `Where the retention period is overridden per-instance, the system shall apply the configured value in place of the 90-day default.`
+- **CI-11-202:** `Where SERVE_DIRECT is enabled on the storage backend, the system shall issue pre-signed direct-download URLs that bypass the Gitea server.`
+
+### Unwanted Behaviour Requirements (Artifact Errors)
+
+- **CI-11-301:** `If an artifact upload exceeds the configured maximum size, then the system shall reject the upload with a size-limit error.`
+- **CI-11-302:** `If a user attempts to download an artifact from a private repository without authentication, then the system shall return 404.`
+- **CI-11-303:** `If an artifact name contains path separators or invalid characters, then the system shall reject the upload.`
+
+---
+
+## Configuration Reference
+
+The following INI sections configure CI/CD and automation behaviors.
+
+### [task] Section
+
+- **QUEUE_TYPE**: Backend for the task queue (`channel`, `levelDB`, `redis`).
+- **QUEUE_LENGTH**: Maximum queue length before backpressure (default 1000).
+- **QUEUE_NAME**: Queue identifier in the backend.
+- **DATADIR**: LevelDB data directory path.
+- **CONN_STR**: Redis or external backend connection string.
+- **WORKERS**: Worker pool size (default CPU count / 2, max 10).
+- **MAX_ATTEMPTS**: Maximum retry attempts per task.
+- **TIMEOUT**: Per-task execution timeout (seconds).
+
+### [actions] Section
+
+- **ENABLED**: Master switch for Gitea Actions.
+- **DEFAULT_ACTIONS_URL**: Default source for action resolution (`github` or self-hosted URL).
+- **ARTIFACT_RETENTION_DAYS**: Days to retain workflow artifacts (default 90).
+- **ZOMBIE_TASK_TIMEOUT**: Idle-then-dead task timeout (default 10m).
+- **ENDLESS_TASK_TIMEOUT**: Maximum task runtime (default 3h).
+- **ABANDONED_JOB_TIMEOUT**: Idle job cleanup threshold (default 24h).
+
+### [actions.artifacts] Section
+
+- **STORAGE_TYPE**: Artifact storage backend (`local`, `minio`).
+- **PATH**: Local filesystem path for artifact storage.
+- **SERVE_DIRECT**: Use direct URLs for MinIO backend.
+- **MINIO_ENDPOINT**, **MINIO_ACCESS_KEY_ID**, **MINIO_SECRET_ACCESS_KEY**, **MINIO_BUCKET**, **MINIO_LOCATION**: MinIO connection parameters.
 
 ---
 

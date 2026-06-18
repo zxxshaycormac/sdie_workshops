@@ -382,6 +382,157 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 
 ---
 
+## 15. Activity Heatmap (UA-07)
+
+**User Story:** As a user, I want a visual contribution calendar on my profile so that my activity over the past year is visible at a glance.
+
+### Ubiquitous Requirements (Heatmap Properties)
+
+- **UA-07-001:** `The system shall track contribution events per user across repositories, issues, pull requests, and comments.`
+- **UA-07-002:** `The system shall aggregate contribution counts per UTC day for heatmap visualization.`
+- **UA-07-003:** `The system shall expose heatmap data for the trailing 365-day window relative to the request time.`
+- **UA-07-004:** `The system shall render the heatmap on the user profile page when the profile is viewable by the requester.`
+
+### Event-Driven Requirements (Heatmap Workflow)
+
+- **UA-07-101:** `When a user performs a contribution action (push, issue create, PR create/review, comment), the system shall increment the corresponding day's contribution count for that user.`
+- **UA-07-102:** `When a viewer requests a user's profile, the system shall return the heatmap data as a structured JSON payload keyed by timestamp and count.`
+- **UA-07-103:** `When a contribution action is reversed (issue deleted, PR reverted), the system shall decrement the corresponding day's contribution count.`
+- **UA-07-104:** `When a user performs an action on a private repository, the system shall include the contribution in the owner's heatmap but exclude it from viewers without access.`
+
+### Optional Feature Requirements (Heatmap Configuration)
+
+- **UA-07-201:** `Where ENABLE_USER_HEATMAP is disabled in configuration, the system shall hide the heatmap from all user profiles.`
+- **UA-07-202:** `Where a user's visibility is set to private, the system shall hide the heatmap from viewers who are not authorized connections.`
+- **UA-07-203:** `Where a user has enabled "keep activity private", the system shall hide the heatmap from non-connections.`
+
+### Unwanted Behaviour Requirements (Heatmap Errors)
+
+- **UA-07-301:** `If a viewer lacks permission to view a user's profile, then the system shall return an empty heatmap dataset rather than a 403.`
+- **UA-07-302:** `If the requested time range exceeds the maximum supported 365-day window, then the system shall clamp the request to the maximum window.`
+
+---
+
+## 16. GPG Keys (AUTH-07)
+
+**User Story:** As a developer, I want to register my GPG public key so that my signed commits and tags are verified and display a "Verified" badge.
+
+### Ubiquitous Requirements (GPG Key Properties)
+
+- **AUTH-07-001:** `The system shall allow each user to register zero or more GPG public keys.`
+- **AUTH-07-002:** `The system shall parse and store the key ID (64-bit short and long form), fingerprint, creation timestamp, and expiry for each registered GPG key.`
+- **AUTH-07-003:** `The system shall use a user's registered GPG keys to verify PGP signatures on Git commits and tags attributed to that user.`
+- **AUTH-07-004:** `The system shall display a "Verified" badge on commit and tag views whose signature validates against a registered GPG key.`
+
+### Event-Driven Requirements (GPG Key Workflow)
+
+- **AUTH-07-101:** `When a user submits an ASCII-armored GPG public key block, the system shall parse the key, extract its metadata, and store it.`
+- **AUTH-07-102:** `When a user requests a key be imported by long ID from a configured public keyserver, the system shall fetch and store the key.`
+- **AUTH-07-103:** `When a commit or tag with a PGP signature is rendered, the system shall attempt to verify the signature against the purported author's registered GPG keys.`
+- **AUTH-07-104:** `When a user deletes a registered GPG key, the system shall remove the key immediately and cease to verify future commits with that key.`
+- **AUTH-07-105:** `When a commit is pushed whose signature fails verification, the system shall render an "Unverified" indicator on the commit view.`
+
+### Optional Feature Requirements (GPG Trust Models)
+
+- **AUTH-07-201:** `Where the repository trust model is "committer", the system shall only mark commits as verified when the committer matches the GPG key identity and the pusher.`
+- **AUTH-07-202:** `Where the repository trust model is "collaborator", the system shall only mark commits as verified when the signer is a collaborator on the repository.`
+- **AUTH-07-203:** `Where the repository trust model is "collaborator-committer", the system shall apply both committer and collaborator constraints.`
+
+### Unwanted Behaviour Requirements (GPG Key Errors)
+
+- **AUTH-07-301:** `If a user submits a malformed GPG key block, then the system shall reject the submission with a parse error.`
+- **AUTH-07-302:** `If a submitted GPG key is already registered to another user, then the system shall reject the registration.`
+- **AUTH-07-303:** `If a registered GPG key has expired, then the system shall mark commits signed after expiry as unverified.`
+
+---
+
+## 17. OpenID Authentication (AUTH-08)
+
+**User Story:** As a user, I want to sign in to Gitea using my OpenID identity so that I can authenticate via a decentralized identity provider.
+
+### Ubiquitous Requirements (OpenID Properties)
+
+- **AUTH-08-001:** `The system shall implement OpenID 2.0 consumer functionality for delegated authentication.`
+- **AUTH-08-002:** `The system shall treat OpenID as one of the AUTH-06 authentication source types.`
+- **AUTH-08-003:** `The system shall discover the OpenID provider endpoint from the user-supplied OpenID URL via Yadis / HTML discovery.`
+- **AUTH-08-004:** `The system shall request the SReg and AX attributes required for account creation (nickname, email, full name).`
+
+### Event-Driven Requirements (OpenID Workflow)
+
+- **AUTH-08-101:** `When a user submits an OpenID URL on the login page, the system shall perform discovery and redirect the user to the provider's authentication endpoint.`
+- **AUTH-08-102:** `When the provider redirects back with a positive assertion, the system shall verify the signature and nonce.`
+- **AUTH-08-103:** `When the verified OpenID matches an existing local account, the system shall authenticate the user as that account.`
+- **AUTH-08-104:** `When the verified OpenID does not match an existing account and OpenID signup is enabled, the system shall create a new local account from the returned attributes.`
+- **AUTH-08-105:** `When a user links an OpenID to their existing account via settings, the system shall store the OpenID URL for future sign-in.`
+
+### Optional Feature Requirements (OpenID Configuration)
+
+- **AUTH-08-201:** `Where ENABLE_OPENID_SIGNIN is enabled, the system shall display the OpenID login option on the login page.`
+- **AUTH-08-202:** `Where ENABLE_OPENID_SIGNUP is enabled, the system shall allow new account creation via OpenID.`
+- **AUTH-08-203:** `Where WHITELISTED_URIS is configured, the system shall reject OpenID URLs not matching the allowlist.`
+- **AUTH-08-204:** `Where BLACKLISTED_URIS is configured, the system shall reject OpenID URLs matching the blocklist.`
+
+### Unwanted Behaviour Requirements (OpenID Errors)
+
+- **AUTH-08-301:** `If the OpenID URL fails discovery, then the system shall reject the login with a discovery error message.`
+- **AUTH-08-302:** `If the provider returns a negative assertion, then the system shall return the user to the login page without authenticating.`
+- **AUTH-08-303:** `If the assertion signature verification fails, then the system shall reject the login and log the failure.`
+- **AUTH-08-304:** `If the assertion nonce has been replayed or expired, then the system shall reject the login.`
+
+---
+
+## Configuration Reference
+
+The following INI sections under `[identity-access]`-relevant namespaces configure this category's behaviors. Add to or modify these via `custom/conf/app.ini` or environment overrides using the `GITEA__section__key` format.
+
+### [security] Section
+
+- **INSTALL_LOCK**: Prevents access to the install page after initial setup.
+- **SECRET_KEY**: Per-instance secret used for session encryption; rotate to invalidate active sessions.
+- **LOGIN_REMEMBER_DAYS**: Number of days a "remember me" session cookie remains valid.
+- **COOKIE_REMEMBER_NAME**: Name of the remember-me cookie.
+- **REVERSE_PROXY_AUTHENTICATION_USER**: Header name (default `X-Webauth-User`) carrying the authenticated username from a trusted reverse proxy.
+- **REVERSE_PROXY_AUTHENTICATION_EMAIL**: Header name carrying the authenticated user's email.
+- **REVERSE_PROXY_AUTHENTICATION_FULL_NAME**: Header name carrying the authenticated user's full name.
+- **REVERSE_PROXY_LIMIT**: Number of trusted proxy hops to traverse when resolving client IP.
+- **REVERSE_PROXY_TRUSTED_PROXIES**: Comma-separated CIDR ranges of trusted reverse proxies.
+- **MIN_PASSWORD_LENGTH**: Minimum password character count (default 8).
+- **PASSWORD_COMPLEXITY**: Comma-separated complexity requirements (`lower,upper,digit,spec`).
+- **PASSWORD_CHECK_PWNED**: Reject passwords appearing in the HaveIBeenPwned breach database when enabled.
+- **INTERNAL_TOKEN**: Secret token for internal API calls between Gitea processes; auto-generated if empty.
+- **INTERNAL_TOKEN_URI**: File or command URI from which to load the internal token.
+
+### [session] Section
+
+- **PROVIDER**: Session storage backend (`memory`, `file`, `redis`, `mysql`, `postgres`, `couchbase`, `redis-cluster`).
+- **PROVIDER_CONFIG**: Connection string consumed by the chosen provider.
+- **COOKIE_NAME**: Name of the session cookie (default `i_like_gitea`).
+- **COOKIE_SECURE**: Force `Secure` attribute on session cookies (`true` = always, `false` = never, `lax` = auto).
+- **GC_INTERVAL_TIME**: Garbage collection interval for expired sessions (seconds, default 60).
+- **MAX_LIFE_TIME**: Maximum session lifetime in seconds.
+- **CSRF_COOKIE_NAME**: Name of the CSRF protection cookie.
+- **SAME_SITE**: SameSite attribute on session cookies (`lax`, `strict`, `none`).
+
+### [oauth2] Section
+
+- **ENABLE**: Enable the OAuth2 provider (Authorization Server) role.
+- **JWT_SECRET**: Secret used to sign OAuth2 JWTs; auto-generated if empty; rotate to invalidate outstanding tokens.
+- **JWT_SIGNING_ALGORITHM**: Algorithm for JWT signing (`RS256`, `HS256`, etc.).
+- **DEFAULT_APPLICATION_VISIBILITY**: Default visibility for newly registered OAuth2 applications.
+- **ACCESS_TOKEN_EXPIRATION_TIME**: Access token TTL in seconds (default 3600).
+- **REFRESH_TOKEN_EXPIRATION_TIME**: Refresh token TTL in hours (default 730).
+- **INVALIDATE_REFRESH_TOKENS**: Rotate refresh tokens on each use when enabled.
+- **CLIENT_SECRET_LENGTH**: Length of generated client secrets.
+
+### [openid] Section
+
+- **ENABLE_OPENID_SIGNIN**: Expose OpenID as a login option (default true).
+- **ENABLE_OPENID_SIGNUP**: Allow new account creation via OpenID (default false unless `DISABLE_REGISTRATION` is true).
+- **WHITELISTED_URIS**: Glob patterns restricting accepted OpenID provider URIs.
+- **BLACKLISTED_URIS**: Glob patterns blocking specific OpenID provider URIs.
+
+---
+
 ## Business Rules
 
 - **BR-01-001:** Usernames must be unique across the entire instance (case-insensitive)
