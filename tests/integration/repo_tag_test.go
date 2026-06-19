@@ -237,4 +237,23 @@ func TestTagsListSearchFilter(t *testing.T) {
 		assert.Contains(t, body, ">delete-tag<")
 		assert.Contains(t, body, ">v1.0<")
 	})
+
+	t.Run("zero-tag repo without q renders no empty-state message", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		// Repo 4 (owner_id=5, owner_name=user5) has no release rows in fixtures,
+		// so its /tags page has zero tags. Pre-feature, this rendered nothing between
+		// the header and the pager. The empty-state message must NOT appear when no
+		// search is active — only when the user searched and got no matches.
+		emptyRepo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 4})
+		emptyOwner := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: emptyRepo.OwnerID})
+		emptySession := loginUser(t, emptyOwner.Name)
+
+		req := NewRequestf(t, "GET", "/%s/%s/tags", emptyOwner.Name, emptyRepo.Name)
+		resp := emptySession.MakeRequest(t, req, http.StatusOK)
+
+		body := resp.Body.String()
+		assert.NotContains(t, body, "No matching results found",
+			"A zero-tag repo with no active search must not show the no-match message")
+	})
 }
