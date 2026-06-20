@@ -234,6 +234,7 @@ type FindReleasesOptions struct {
 	IsPreRelease  optional.Option[bool]
 	IsDraft       optional.Option[bool]
 	TagNames      []string
+	Keyword       string // substring match on tag_name; empty disables the filter
 	HasSha1       optional.Option[bool] // useful to find draft releases which are created with existing tags
 }
 
@@ -248,6 +249,9 @@ func (opts FindReleasesOptions) ToConds() builder.Cond {
 	}
 	if len(opts.TagNames) > 0 {
 		cond = cond.And(builder.In("tag_name", opts.TagNames))
+	}
+	if opts.Keyword != "" {
+		cond = cond.And(builder.Like{"tag_name", opts.Keyword})
 	}
 	if opts.IsPreRelease.Has() {
 		cond = cond.And(builder.Eq{"is_prerelease": opts.IsPreRelease.Value()})
