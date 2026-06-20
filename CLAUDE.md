@@ -108,6 +108,10 @@ For non-trivial changes, write an implementation plan before coding. Use plan mo
 
 ## (I)mplementation — Development + Testing
 
+### Go Version
+
+Use **asdf**. Go is pinned to **1.22.x** via `.tool-versions`.
+
 ### Build & Run
 
 ```bash

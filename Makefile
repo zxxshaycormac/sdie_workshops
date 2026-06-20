@@ -18,7 +18,14 @@ DIST := dist
 DIST_DIRS := $(DIST)/binaries $(DIST)/release
 IMPORT := code.gitea.io/gitea
 
-GO ?= go
+# Resolve Go via asdf when available so .tool-versions always wins over any system Go.
+# Falls back to `go` on PATH if asdf is absent (go-check will then enforce the pin).
+ASDF_GO := $(shell command -v asdf >/dev/null 2>&1 && asdf which go 2>/dev/null)
+ifneq ($(ASDF_GO),)
+	GO ?= $(ASDF_GO)
+else
+	GO ?= go
+endif
 SHASUM ?= shasum -a 256
 HAS_GO := $(shell hash $(GO) > /dev/null 2>&1 && echo yes)
 COMMA := ,
@@ -252,9 +259,23 @@ help:
 go-check:
 	$(eval MIN_GO_VERSION_STR := $(shell grep -Eo '^go\s+[0-9]+\.[0-9]+' go.mod | cut -d' ' -f2))
 	$(eval MIN_GO_VERSION := $(shell printf "%03d%03d" $(shell echo '$(MIN_GO_VERSION_STR)' | tr '.' ' ')))
-	$(eval GO_VERSION := $(shell printf "%03d%03d" $(shell $(GO) version | grep -Eo '[0-9]+\.[0-9]+' | tr '.' ' ');))
+	$(eval GO_VERSION_STR := $(shell $(GO) version | grep -Eo '[0-9]+\.[0-9]+' | head -n1))
+	$(eval GO_VERSION := $(shell printf "%03d%03d" $(shell echo '$(GO_VERSION_STR)' | tr '.' ' ');))
 	@if [ "$(GO_VERSION)" -lt "$(MIN_GO_VERSION)" ]; then \
 		echo "Gitea requires Go $(MIN_GO_VERSION_STR) or greater to build. You can get it at https://go.dev/dl/"; \
+		exit 1; \
+	fi
+	@if [ "$(GO_VERSION)" -gt "$(MIN_GO_VERSION)" ]; then \
+		echo ">> Go $(GO_VERSION_STR) is newer than the branch pin $(MIN_GO_VERSION_STR).x."; \
+		echo ">> This branch (Gitea 1.22.x backport) pins Go to $(MIN_GO_VERSION_STR).x in go.mod and .tool-versions."; \
+		echo ">> Newer Go breaks golangci-lint v1.57.2 and some stdlib tests (e.g. TestParseGitURLs)."; \
+		echo ">>"; \
+		echo ">> Recommended: use asdf to follow the pinned version:"; \
+		echo ">>   brew install asdf"; \
+		echo ">>   asdf plugin add golang"; \
+		echo ">>   asdf install            # reads .tool-versions"; \
+		echo ">>"; \
+		echo ">> Or install Go $(MIN_GO_VERSION_STR).x manually from https://go.dev/dl/"; \
 		exit 1; \
 	fi
 
