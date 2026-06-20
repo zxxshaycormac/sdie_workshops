@@ -234,7 +234,7 @@ type FindReleasesOptions struct {
 	IsPreRelease  optional.Option[bool]
 	IsDraft       optional.Option[bool]
 	TagNames      []string
-	Keyword       string // substring match on tag_name; empty disables the filter
+	Keyword       string                // substring match on tag_name; empty disables the filter
 	HasSha1       optional.Option[bool] // useful to find draft releases which are created with existing tags
 }
 
