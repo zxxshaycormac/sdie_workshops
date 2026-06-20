@@ -164,3 +164,70 @@ func TestRepushTag(t *testing.T) {
 		assert.False(t, respRelease.IsDraft)
 	})
 }
+
+func TestTagsListSearch(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 1})
+	owner := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: repo.OwnerID})
+
+	// Create three tags with distinct name prefixes so we can verify the
+	// filter narrows the list. Clean them up at the end so the test is hermetic.
+	tagNames := []string{"alpha-search-1", "alpha-search-2", "beta-search-1"}
+	for _, name := range tagNames {
+		err := release.CreateNewTag(git.DefaultContext, owner, repo, "master", name, "test tag "+name)
+		assert.NoError(t, err)
+	}
+	defer func() {
+		// Clean up the release rows created by CreateNewTag. Best-effort;
+		// errors are ignored because the test is ending.
+		releases, err := db.Find[repo_model.Release](db.DefaultContext, repo_model.FindReleasesOptions{
+			RepoID:   repo.ID,
+			TagNames: tagNames,
+		})
+		if err != nil {
+			return
+		}
+		for _, r := range releases {
+			_, _ = db.DeleteByID[repo_model.Release](db.DefaultContext, r.ID)
+		}
+	}()
+
+	t.Run("substring match", func(t *testing.T) {
+		req := NewRequestf(t, "GET", "/%s/tags?q=alpha-search", repo.FullName())
+		resp := MakeRequest(t, req, http.StatusOK)
+		doc := NewHTMLParser(t, resp.Body)
+
+		// Both alpha-search-* tags appear in the tags table.
+		text := doc.Find(`#tags-table`).Text()
+		assert.Contains(t, text, "alpha-search-1")
+		assert.Contains(t, text, "alpha-search-2")
+
+		// The beta tag does NOT appear.
+		assert.NotContains(t, text, "beta-search-1")
+
+		// The search input is pre-filled with the query.
+		inputVal, ok := doc.Find(`input[name="q"]`).Attr("value")
+		assert.True(t, ok)
+		assert.Equal(t, "alpha-search", inputVal)
+	})
+
+	t.Run("no match shows empty state", func(t *testing.T) {
+		req := NewRequestf(t, "GET", "/%s/tags?q=no-such-tag-xyz-123", repo.FullName())
+		resp := MakeRequest(t, req, http.StatusOK)
+		doc := NewHTMLParser(t, resp.Body)
+
+		text := doc.Find(`.page-content`).Text()
+		assert.Contains(t, text, "No tags match")
+	})
+
+	t.Run("absent q preserves full list", func(t *testing.T) {
+		req := NewRequestf(t, "GET", "/%s/tags", repo.FullName())
+		resp := MakeRequest(t, req, http.StatusOK)
+		doc := NewHTMLParser(t, resp.Body)
+
+		text := doc.Find(`#tags-table`).Text()
+		assert.Contains(t, text, "alpha-search-1")
+		assert.Contains(t, text, "beta-search-1")
+	})
+}

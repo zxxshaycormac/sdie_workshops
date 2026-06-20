@@ -4,6 +4,11 @@
 	<div class="ui container">
 		{{template "base/alert" .}}
 		{{template "repo/release_tag_header" .}}
+		<div class="ui attached segment">
+			<form class="ignore-dirty" method="get">
+				{{template "shared/search/combo" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.tag_kind")}}
+			</form>
+		</div>
 		{{if .Releases}}
 		<h4 class="ui top attached header">
 			<div class="five wide column tw-flex tw-items-center">
@@ -57,6 +62,10 @@
 					{{end}}
 				</tbody>
 			</table>
+		</div>
+		{{else if .Keyword}}
+		<div class="ui attached segment center">
+			{{ctx.Locale.Tr "repo.release.tags.no_match" .Keyword}}
 		</div>
 		{{end}}
 
