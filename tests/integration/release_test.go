@@ -256,3 +256,49 @@ func TestDownloadReleaseAttachment(t *testing.T) {
 	session := loginUser(t, "user2")
 	session.MakeRequest(t, req, http.StatusOK)
 }
+
+func TestViewTagsListSearch(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 1})
+	link := repo.Link() + "/tags"
+	session := loginUser(t, "user1")
+
+	// Search for "v1" — should match "v1.0" and "v1.1" (case-insensitive)
+	req := NewRequest(t, "GET", link+"?q=v1")
+	rsp := session.MakeRequest(t, req, http.StatusOK)
+	htmlDoc := NewHTMLParser(t, rsp.Body)
+	tags := htmlDoc.Find(".tag-list-row-link")
+	assert.Equal(t, 2, tags.Length())
+	tagNames := make([]string, 0, 2)
+	tags.Each(func(i int, s *goquery.Selection) {
+		tagNames = append(tagNames, s.Text())
+	})
+	assert.ElementsMatch(t, []string{"v1.0", "v1.1"}, tagNames)
+
+	// Search input should reflect the current keyword
+	searchInput := htmlDoc.Find(`input[name="q"]`)
+	assert.Equal(t, 1, searchInput.Length())
+	assert.Equal(t, "v1", searchInput.AttrOr("value", ""))
+
+	// Uppercase keyword should also match (case-insensitive)
+	req = NewRequest(t, "GET", link+"?q=V1")
+	rsp = session.MakeRequest(t, req, http.StatusOK)
+	htmlDoc = NewHTMLParser(t, rsp.Body)
+	tags = htmlDoc.Find(".tag-list-row-link")
+	assert.Equal(t, 2, tags.Length())
+
+	// Search for nonexistent tag — empty result, page still 200
+	req = NewRequest(t, "GET", link+"?q=nonexistent-xyz")
+	rsp = session.MakeRequest(t, req, http.StatusOK)
+	htmlDoc = NewHTMLParser(t, rsp.Body)
+	tags = htmlDoc.Find(".tag-list-row-link")
+	assert.Equal(t, 0, tags.Length())
+
+	// No keyword — all tags shown (regression check)
+	req = NewRequest(t, "GET", link)
+	rsp = session.MakeRequest(t, req, http.StatusOK)
+	htmlDoc = NewHTMLParser(t, rsp.Body)
+	tags = htmlDoc.Find(".tag-list-row-link")
+	assert.Equal(t, 3, tags.Length())
+}
