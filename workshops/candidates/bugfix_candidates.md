@@ -154,7 +154,7 @@ Four candidates analyzed in depth for the Bug Fix workshop (W2). Each evaluated 
 
 - **PR**: [#32859](https://github.com/go-gitea/gitea/pull/32859) | **Issue**: [#32857](https://github.com/go-gitea/gitea/issues/32857)
 - **Files**: 6 (1 new test) | **Lines**: +106/-38
-- **Bug**: `AggregateJobStatus()` only handled 4 states (Failure, Success, Waiting, Running) but ignored Cancelled, Blocked, and Skipped. For example, all jobs skipped → showed "Running" instead of "Skipped"; cancelled jobs → showed "Failure" instead of "Cancelled".
+- **Bug**: `AggregateJobStatus()` only handled 4 states (Failure, Success, Waiting, Running) but ignored Cancelled, Blocked, and Skipped. For example, all jobs skipped → showed "Success" instead of "Skipped"; cancelled jobs → showed "Failure" instead of "Cancelled".
 - **Root cause**: Boolean-based logic (`allDone`, `allWaiting`, `hasFailure`) couldn't represent all status combinations. Cancelled was lumped with Failure, Skipped/Blocked were invisible.
 - **Fix approach**:
   1. **Core** (`models/actions/run_job.go`): Replaced with flag-based `switch` — `allSuccessOrSkipped`, `hasFailure`, `hasCancelled`, `hasSkipped`, `hasWaiting`, `hasRunning`, `hasBlocked`. Priority: Success > Failure > Running > Waiting > Blocked > Cancelled > Skipped.
