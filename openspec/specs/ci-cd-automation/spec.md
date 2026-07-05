@@ -11,8 +11,8 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 ### Ubiquitous Requirements (Workflow Properties)
 
 - **CI-01-001:** `The system shall parse workflow definitions from YAML files stored in the .gitea/workflows/ or .github/workflows/ directory of a repository.`
-- **CI-01-002:** `The system shall support the following workflow trigger events: push, pull_request, schedule, workflow_dispatch, and repository_dispatch.`
-- **CI-01-003:** `The system shall track workflow run status through the lifecycle: pending, waiting, running, success, failure, and cancelled.`
+- **CI-01-002:** `The system shall support the following workflow trigger events: push, pull_request, pull_request_target, schedule, create, delete, fork, issues, issue_comment, release, pull_request_review, pull_request_review_comment, registry_package, and gollum. The workflow_dispatch and repository_dispatch events are NOT supported (ignored by Gitea Actions).`
+- **CI-01-003:** `The system shall track workflow run status through the lifecycle: unknown, waiting (pending), running, success, failure, cancelled, skipped, and blocked.`
 - **CI-01-004:** `The system shall support parallel job execution within a single workflow run.`
 - **CI-01-005:** `The system shall support matrix build strategies that fan out jobs across defined parameter combinations.`
 - **CI-01-006:** `The system shall store workflow run logs with persistent storage and indexed access for retrieval.`
@@ -43,6 +43,11 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-01-203:** `Where scheduled workflows are defined with cron syntax, the system shall trigger workflow runs according to the specified schedule.`
 - **CI-01-204:** `Where a status badge endpoint is requested for a workflow, the system shall return an SVG image reflecting the latest run status.`
 - **CI-01-205:** `Where the actions feature is disabled via configuration, the system shall hide all actions UI and API endpoints.`
+- **CI-01-206:** `Where a workflow uses the pull_request_target trigger, the system shall run the workflow in the context of the base branch (not the PR head) so that fork pull requests cannot execute untrusted code with write secrets.`
+- **CI-01-207:** `Where a workflow run is triggered from a fork pull request (non-pull_request_target), the system shall require manual maintainer approval before scheduling jobs unless the triggering user has write Actions permission or was previously approved.`
+- **CI-01-208:** `Where a commit message or PR title contains one of the configured SKIP_WORKFLOW_STRINGS (default [skip ci], [ci skip], [no ci], [skip actions], [actions skip]), the system shall skip the workflow run for push, pull_request, and pull_request_sync events.`
+- **CI-01-209:** `The system shall persist per-task outputs via ActionTaskOutput (keyed by TaskID + OutputKey) and a per-scope ActionTasksVersion monotonic counter (global/org/repo) so reruns reset outputs and runners can detect new tasks.`
+- **CI-01-210:** `The system shall store workflow run logs in a dedicated [actions_log] storage backend (distinct from [actions.artifacts]), resolved via getStorage(rootCfg, "actions_log", "", nil).`
 
 ### Unwanted Behaviour Requirements (Actions Errors)
 
@@ -51,6 +56,7 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-01-303:** `If an artifact exceeds the configured retention period (default 90 days), then the system shall delete the artifact.`
 - **CI-01-304:** `If a job remains abandoned beyond the configured ABANDONED_JOB_TIMEOUT (default 24 hours), then the system shall cancel the job.`
 - **CI-01-305:** `If the actions unit is disabled for a repository, then the system shall reject workflow trigger events for that repository.`
+- **CI-01-306:** `If a fork pull request run has not been approved and the triggering user lacks write Actions permission and has never been approved before, then the system shall hold the run in blocked (NeedApproval) state pending manual approval.`
 
 ### Complex Requirements (Runner Registration)
 
@@ -78,7 +84,7 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-02-104:** `When a user triggers a test delivery via the UI or API, the system shall send a test payload to the webhook endpoint.`
 - **CI-02-105:** `When a user requests redelivery of a past webhook, the system shall resend the original payload to the endpoint.`
 - **CI-02-106:** `When a webhook delivery times out, the system shall record the timeout as a delivery failure.`
-- **CI-02-107:** `When the following repository events occur, the system shall trigger webhook delivery: push, create, delete, release, pull request, pull request review, pull request review comment, issues, issue comment, issue label, issue milestone, issue assign, repository, and package.`
+- **CI-02-107:** `When the following repository events occur, the system shall trigger webhook delivery: push, create, delete, fork, issues, issue assign, issue label, issue milestone, issue comment, pull request, pull request assign, pull request label, pull request milestone, pull request comment, pull request review (approved/rejected/comment), pull request sync, pull request review request, wiki, repository, release, package, and schedule.`
 
 ### Optional Feature Requirements (Webhook Security)
 
@@ -123,23 +129,24 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 
 ### Ubiquitous Requirements (Auto-merge Properties)
 
-- **CI-04-001:** `The system shall support the following merge strategies for auto-merge: merge commit, squash merge, and rebase merge.`
-- **CI-04-002:** `The system shall track the head SHA at the time auto-merge is scheduled to detect stale merge attempts.`
+- **CI-04-001:** `The system shall support the following merge strategies: merge (merge commit), rebase (rebase then fast-forward), rebase-merge (rebase then merge commit), squash (squash into single commit), fast-forward-only, manually-merged (mark as merged directly), and rebase-update-only (update pull head by rebase, not a true merge).`
+- **CI-04-002:** `The system shall pass the head SHA in the transient queue message (not persisted in the pull_auto_merge DB table, which stores only ID, PullID, DoerID, MergeStyle, Message, and CreatedUnix) so the worker can detect stale entries at runtime.`
 - **CI-04-003:** `The system shall process auto-merge requests through a queue to prevent race conditions on concurrent eligible PRs.`
 
 ### Event-Driven Requirements (Auto-merge Workflow)
 
-- **CI-04-101:** `When a user schedules auto-merge on a pull request, the system shall record the request with the selected merge strategy and head SHA.`
+- **CI-04-101:** `When a user schedules auto-merge on a pull request, the system shall record the request (DoerID, MergeStyle, Message) in the pull_auto_merge table and enqueue a transient queue message carrying the head SHA for later validation.`
 - **CI-04-102:** `When all required status checks pass, required approvals are satisfied, and no merge conflicts exist, the system shall merge the pull request automatically.`
 - **CI-04-103:** `When auto-merge is scheduled, the system shall post a comment on the pull request indicating the auto-merge is pending.`
 - **CI-04-104:** `When a user cancels auto-merge, the system shall remove the scheduled merge and post a cancellation comment.`
-- **CI-04-105:** `When the pull request head SHA changes after auto-merge is scheduled, the system shall retain the auto-merge request and re-evaluate conditions against the new SHA.`
+- **CI-04-105:** `When the pull request head SHA changes after auto-merge is scheduled, the system shall enqueue a new auto-merge job carrying the new SHA; the stale queued entry is silently skipped at runtime and a new request is expected in the queue.`
 
 ### Unwanted Behaviour Requirements (Auto-merge Errors)
 
 - **CI-04-301:** `If the pull request has merge conflicts at the time conditions are evaluated, then the system shall not merge and shall notify the author.`
 - **CI-04-302:** `If a non-author or non-admin user attempts to schedule auto-merge, then the system shall deny the operation.`
-- **CI-04-303:** `If the head SHA at merge time differs from the scheduled SHA and no new push has occurred, then the system shall abort the merge.`
+- **CI-04-303:** `If the head SHA at merge time differs from the SHA carried in the queue message, then the system shall silently log a warning and skip the request (no abort notification), expecting a newer queued request to handle the updated head.`
+- **CI-04-304:** `If the pull request uses the AGit flow (PullRequestFlowAGit), then the system shall validate head existence via ref name (git.IsReferenceExist) rather than head branch, so auto-merge works for AGit-flow PRs that have no head branch.`
 
 ### Event-Driven Requirements (Auto-merge Management)
 
@@ -229,6 +236,18 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-07-107:** `When the cron schedule for abandoned job cleanup fires (default every 6 hours), the system shall cancel jobs exceeding ABANDONED_JOB_TIMEOUT.`
 - **CI-07-108:** `When the cron schedule for scheduled workflows fires, the system shall trigger all workflow runs due at that time.`
 - **CI-07-109:** `When an external user sync source (LDAP) is configured and its cron schedule fires (default daily), the system shall synchronize user data from the external source.`
+- **CI-07-110:** `When the cron schedule for cleanup_hook_task_table fires, the system shall prune stale webhook hook_task records.`
+- **CI-07-111:** `When the cron schedule for cleanup_packages fires (default daily, only when packages enabled), the system shall delete package versions older than the configured retention.`
+- **CI-07-112:** `When the cron schedule for deleted_branches_cleanup fires, the system shall remove deleted branch records.`
+- **CI-07-113:** `When the cron schedule for update_migration_poster_id fires (migrations enabled), the system shall fix migrated commit poster IDs.`
+- **CI-07-114:** `When the cron schedule for delete_inactive_accounts fires, the system shall delete users whose activation code expired beyond ActiveCodeLives.`
+- **CI-07-115:** `When the cron schedule for git_gc_repos fires, the system shall run git garbage collection on repositories.`
+- **CI-07-116:** `When the cron schedule for gc_lfs fires (LFS enabled), the system shall garbage-collect unassociated LFS meta objects older than one week.`
+- **CI-07-117:** `When the cron schedule for update_checker fires (default weekly), the system shall query the Gitea update endpoint for new releases.`
+- **CI-07-118:** `When the cron schedule for delete_old_actions fires, the system shall delete activity records older than one year.`
+- **CI-07-119:** `When the cron schedule for delete_old_system_notices fires, the system shall delete system notices older than one year.`
+- **CI-07-120:** `When the cron schedule for rebuild_issue_indexer fires, the system shall repopulate the issue search index from the database.`
+- **CI-07-121:** `When the cron schedule for cleanup_actions fires (default daily, actions enabled), the system shall delete expired Actions runs/tasks/logs older than the configured threshold (distinct from artifact retention).`
 
 ### Optional Feature Requirements (Cron Configuration)
 
@@ -312,6 +331,7 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-09-302:** `If a secret name contains characters other than alphanumeric or underscore, then the system shall reject the secret creation with a validation error.`
 - **CI-09-303:** `If an unauthorized user attempts to view, create, or delete a secret, then the system shall deny the operation with 403 Forbidden.`
 - **CI-09-304:** `If a workflow references a secret name that is not defined at any scope, then the system shall substitute an empty string for the secret value and continue the run.`
+- **CI-09-305:** `If a secret name begins with the reserved prefixes GITEA_ or GITHUB_ (case-insensitive), then the system shall reject the secret creation with a validation error to prevent collision with built-in environment variables.`
 
 ---
 
@@ -343,6 +363,7 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 - **CI-10-301:** `If a variable name contains characters other than alphanumeric or underscore, then the system shall reject the variable creation with a validation error.`
 - **CI-10-302:** `If a workflow references an undefined variable, then the system shall substitute an empty string and continue the run.`
 - **CI-10-303:** `If an unauthorized user attempts to view, create, or delete a variable, then the system shall deny the operation with 403 Forbidden.`
+- **CI-10-304:** `If a variable name begins with the reserved prefix CI (case-insensitive), then the system shall reject the variable creation with a validation error to prevent collision with the built-in CI runtime variable.`
 
 ---
 
@@ -387,25 +408,57 @@ Baseline specification of Gitea's CI/CD, webhook, automation, and background pro
 
 The following INI sections configure CI/CD and automation behaviors.
 
-### [task] Section
+### [task] Section (DEPRECATED since v1.19.0)
 
-- **QUEUE_TYPE**: Backend for the task queue (`channel`, `levelDB`, `redis`).
-- **QUEUE_LENGTH**: Maximum queue length before backpressure (default 1000).
-- **QUEUE_NAME**: Queue identifier in the backend.
-- **DATADIR**: LevelDB data directory path.
-- **CONN_STR**: Redis or external backend connection string.
-- **WORKERS**: Worker pool size (default CPU count / 2, max 10).
-- **MAX_ATTEMPTS**: Maximum retry attempts per task.
-- **TIMEOUT**: Per-task execution timeout (seconds).
+The `[task]` section is deprecated; use `[queue.task]` instead. Only 3 keys are still read from `[task]` for backward compatibility:
+
+- **QUEUE_TYPE**: Backend for the task queue (`channel`, `levelDB`, `redis`) — deprecated, use `[queue.task].TYPE`.
+- **QUEUE_CONN_STR**: Connection string for redis/external backends — deprecated, use `[queue.task].CONN_STR`.
+- **QUEUE_LENGTH**: Maximum queue length before backpressure — deprecated, use `[queue.task].LENGTH`.
+
+The following keys found in older docs do NOT exist and have no effect: `QUEUE_NAME`, `DATADIR`, `CONN_STR`, `WORKERS`, `MAX_ATTEMPTS`, `TIMEOUT`.
+
+### [queue] / [queue.<name>] Section
+
+Each named queue (e.g. `task`, `webhook`, `issue_indexer`) is configured under `[queue.<name>]`, with global defaults under `[queue]`:
+
+- **TYPE**: Queue backend (`level`, `channel`, `redis`, `dummy`). Default `level` (LevelDB).
+- **DATADIR**: LevelDB data directory path (relative to AppDataPath). Default `queues/common`.
+- **CONN_STR**: Connection string for LevelDB or Redis backends.
+- **LENGTH**: Max queue length before a channel queue blocks. Default 100000.
+- **QUEUE_NAME**: Storage name suffix (db key / redis key). Default `_queue`.
+- **SET_NAME**: Set name suffix for unique queues. Default `_unique`.
+- **BATCH_LENGTH**: Number of items fetched per batch. Default 20.
+- **MAX_WORKERS**: Worker pool cap. Default `CPU count / 2` (minimum 1).
+
+### [webhook] Section
+
+- **QUEUE_LENGTH**: Max queued webhook deliveries before backpressure (default 1000).
+- **DELIVER_TIMEOUT**: Per-delivery HTTP timeout in seconds (default 5).
+- **SKIP_TLS_VERIFY**: Skip TLS certificate verification on delivery (default false).
+- **ALLOWED_HOST_LIST**: Comma-separated allowed destination host list (SSRF protection).
+- **PAGING_NUM**: Paging size for webhook list UI/API (default 10).
+- **PROXY_URL**: Outbound proxy URL for webhook delivery.
+- **PROXY_HOSTS**: Comma-separated host patterns routed through the proxy.
+
+### [cron] / [cron.<name>] Section
+
+Each cron task is configured under `[cron.<task_name>]` with these keys:
+
+- **ENABLED**: Whether the task runs on schedule (default per task).
+- **RUN_AT_START**: Run once at system startup (default per task).
+- **SCHEDULE**: Standard cron syntax schedule (default per task).
+- **NOTICE_ON_SUCCESS**: Post a system notice on successful run (default per task).
 
 ### [actions] Section
 
-- **ENABLED**: Master switch for Gitea Actions.
-- **DEFAULT_ACTIONS_URL**: Default source for action resolution (`github` or self-hosted URL).
+- **ENABLED**: Master switch for Gitea Actions (default true).
+- **DEFAULT_ACTIONS_URL**: Default source for action resolution (`github` or `self`).
 - **ARTIFACT_RETENTION_DAYS**: Days to retain workflow artifacts (default 90).
 - **ZOMBIE_TASK_TIMEOUT**: Idle-then-dead task timeout (default 10m).
 - **ENDLESS_TASK_TIMEOUT**: Maximum task runtime (default 3h).
 - **ABANDONED_JOB_TIMEOUT**: Idle job cleanup threshold (default 24h).
+- **SKIP_WORKFLOW_STRINGS**: Commit-message/PR-title substrings that skip workflow runs: `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`, `[actions skip]` (applies to push and pull_request/_sync events only).
 
 ### [actions.artifacts] Section
 
@@ -413,6 +466,10 @@ The following INI sections configure CI/CD and automation behaviors.
 - **PATH**: Local filesystem path for artifact storage.
 - **SERVE_DIRECT**: Use direct URLs for MinIO backend.
 - **MINIO_ENDPOINT**, **MINIO_ACCESS_KEY_ID**, **MINIO_SECRET_ACCESS_KEY**, **MINIO_BUCKET**, **MINIO_LOCATION**: MinIO connection parameters.
+
+### [actions_log] Section
+
+Workflow run logs use a dedicated storage type, configured under `[actions_log]` (resolved via `getStorage(rootCfg, "actions_log", "", nil)`). It is distinct from `[actions.artifacts]` and supports the same storage keys (`STORAGE_TYPE`, `PATH`, `SERVE_DIRECT`, `MINIO_*`). The legacy `[actions]` section is NOT consulted for log storage.
 
 ---
 
@@ -426,12 +483,12 @@ The following INI sections configure CI/CD and automation behaviors.
 - **BR-05-006:** Webhook host allowlist is enforced for all outgoing deliveries when configured
 - **BR-05-007:** Agit flow requires write permission on the target repository
 - **BR-05-008:** Auto-merge can only be scheduled by the PR author or a repository admin
-- **BR-05-009:** Auto-merge tracks the head SHA to prevent merging stale code
+- **BR-05-009:** Auto-merge validates the head SHA from the transient queue message (not persisted in the DB table); stale entries are silently skipped, not aborted with notification
 - **BR-05-010:** Commit status contexts are independent; combined status is failure if any context fails
 - **BR-05-011:** Git hooks are disabled by default (DISABLE_GIT_HOOKS=true) for security
 - **BR-05-012:** Cron tasks have independent schedules and can be enabled or disabled individually
 - **BR-05-013:** Queue worker pool size defaults to CPU count / 2 with a maximum of 10 workers
-- **BR-05-014:** LevelDB is the default queue backend for production; channel is for single-instance development
+- **BR-05-014:** The default `[queue].TYPE` is `level` (LevelDB); the `channel` backend is only the default for the legacy `[task]` shim, not for production queues
 
 ## Edge Cases & Error Handling
 
@@ -444,8 +501,9 @@ The following INI sections configure CI/CD and automation behaviors.
 | Webhook delivery to disallowed host | Rejected with security error |
 | Webhook queue exceeds max length | Backpressure applied to prevent unbounded growth |
 | Agit push to non-existent base branch | Push rejected with error message |
-| Auto-merge on PR with merge conflicts | Merge blocked; author notified |
+| Auto-merge on PR with merge conflicts | Merge blocked; conditions not satisfied |
 | Auto-merge scheduled by non-author/non-admin | Operation denied |
+| Auto-merge head SHA changed since scheduled | Stale queue entry silently logged & skipped; newer queued request handles new SHA |
 | Commit status for non-existent SHA | Request rejected |
 | Git hook script with syntax error | Script saved but error logged on execution failure |
 | Git hooks modified by non-admin | Operation denied |
