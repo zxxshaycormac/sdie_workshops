@@ -1,6 +1,8 @@
-# 02 — Collaboration
+# 04 — Collaboration
 
-Baseline specification of Gitea's collaboration subsystems: issues, pull requests, wiki, projects, milestones, labels, reactions, notifications, time tracking, and comments. All requirements describe the current (v1.22.x) system behavior.
+Baseline specification of Gitea's collaboration subsystems: issues, pull requests, agit flow, projects, milestones, labels (repo and org scope), reactions, notifications (triggers and in-app UI), time tracking, comments, CODEOWNERS, close keywords, content history, issue/PR search, and autocomplete. All requirements describe the current (v1.22.x) system behavior.
+
+> **Notification scope note:** Notification infrastructure (event bus / `services/notify` dispatcher) is documented in Domain 07 (Platform Services). This domain documents collaboration-specific notification triggers and the in-app notification UI.
 
 ---
 
@@ -93,33 +95,26 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 ---
 
-## 3. Wiki (COLL-03)
+## 3. Agit Flow (COLL-03)
 
-**User Story:** As a collaborator, I want to create and maintain wiki pages so that project documentation lives alongside the codebase.
+**User Story:** As a contributor, I want to create a pull request by pushing to a special ref so that I can propose changes without using the web UI or API.
 
-#### Ubiquitous Requirements (Wiki Properties)
+#### Ubiquitous Requirements (Agit Properties)
 
-- **COLL-03-001:** `The system shall store wiki content as a separate Git repository alongside the main repository.`
-- **COLL-03-002:** `The system shall render wiki pages as markdown.`
-- **COLL-03-003:** `The system shall designate a default wiki page named "Home".`
+- **COLL-03-001:** `The system shall recognize refs/for/<base-branch>/<topic-branch> as a special push target that triggers pull request creation.`
+- **COLL-03-002:** `The system shall prefix topic branches with the pushing user's identifier to avoid naming conflicts.`
 
-#### Event-Driven Requirements (Wiki Lifecycle)
+#### Event-Driven Requirements (Agit Workflow)
 
-- **COLL-03-101:** `When a user creates a new wiki page, the system shall commit the page content to the wiki Git repository.`
-- **COLL-03-102:** `When a user edits a wiki page, the system shall record the change as a new commit in the wiki repository preserving full edit history.`
-- **COLL-03-103:** `When a user deletes a wiki page, the system shall remove the page from the wiki repository.`
-- **COLL-03-104:** `When a user creates a page named "_Sidebar", the system shall display it as navigation in the wiki view.`
-- **COLL-03-105:** `When a user creates a page named "_Footer", the system shall display it as footer content in the wiki view.`
+- **COLL-03-101:** `When a user pushes to refs/for/<base-branch>/<topic-branch>, the system shall create a pull request from the topic branch targeting the specified base branch.`
+- **COLL-03-102:** `When an agit flow push is received, the system shall create the topic branch and pull request in a single atomic operation.`
+- **COLL-03-103:** `When force push is configured for the repository, the system shall allow force pushing to agit flow refs.`
 
-#### Optional Feature Requirements (Wiki Configuration)
+#### Unwanted Behaviour Requirements (Agit Errors)
 
-- **COLL-03-201:** `Where an external wiki URL is configured for a repository, the system shall redirect the wiki tab to the external URL.`
-- **COLL-03-202:** `Where the Wiki unit is disabled, the system shall hide the wiki tab from the repository navigation.`
-
-#### Unwanted Behaviour Requirements (Wiki Errors)
-
-- **COLL-03-301:** `If a user without write permission attempts to create or edit a wiki page, then the system shall deny the operation.`
-- **COLL-03-302:** `If a wiki page name conflicts with the reserved names "_Sidebar" or "_Footer" used for navigation, then the system shall treat it as a navigation element rather than a regular page.`
+- **COLL-03-301:** `If the user pushing via agit flow does not have write permission on the repository, then the system shall reject the push.`
+- **COLL-03-302:** `If the specified base branch does not exist, then the system shall reject the agit flow push with an error.`
+- **COLL-03-303:** `If the topic branch name does not meet format requirements, then the system shall reject the agit flow push.`
 
 ---
 
@@ -182,13 +177,14 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 ## 6. Labels (COLL-06)
 
-**User Story:** As a repository maintainer, I want to create and apply labels so that issues and pull requests are categorized and filterable.
+**User Story:** As a repository or organization maintainer, I want to create and apply labels so that issues and pull requests are categorized and filterable. Labels span repository and organization scope: repository-specific labels apply to a single repository, while organization-level labels are shared across all repositories owned by the organization.
 
 #### Ubiquitous Requirements (Label Properties)
 
 - **COLL-06-001:** `The system shall store the following properties per label: name, color (hex), description, and scope (repository or organization).`
 - **COLL-06-002:** `The system shall support two label scopes: repository-specific labels and organization-level labels shared across all org repos.`
 - **COLL-06-003:** `The system shall allow multiple labels per issue or pull request.`
+- **COLL-06-004:** `The system shall distinguish organization-level labels from repository-specific labels in the label management interface.`
 
 #### Event-Driven Requirements (Label Lifecycle)
 
@@ -197,17 +193,20 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-06-103:** `When a user removes a label from an issue or PR, the system shall record a label-removed event.`
 - **COLL-06-104:** `When a user deletes a label, the system shall remove it from all issues and PRs that had the label applied.`
 - **COLL-06-105:** `When a user initializes labels from a template, the system shall create all labels defined in the selected template set.`
+- **COLL-06-106:** `When an organization owner updates an organization-level label, the system shall propagate the change to all issues and pull requests currently using that label.`
 
 #### Optional Feature Requirements (Exclusive Labels)
 
 - **COLL-06-201:** `Where a label name contains a forward slash (e.g., "priority/high"), the system shall treat the prefix before the slash as a scope and enforce exclusivity such that only one label per scope may be applied to a single issue or PR.`
 - **COLL-06-202:** `Where a user applies a scoped label that conflicts with an existing label in the same scope, the system shall replace the existing scoped label with the new one.`
+- **COLL-06-203:** `Where an organization-level label is archived (soft-deleted), the system shall hide it from the label selection UI while preserving its existing usage on issues and pull requests.`
 
 #### Unwanted Behaviour Requirements (Label Errors)
 
 - **COLL-06-301:** `If a user without write permission attempts to create, edit, or delete a label, then the system shall deny the operation.`
 - **COLL-06-302:** `If a label name duplicates an existing label in the same scope (repo or org), then the system shall reject the creation.`
 - **COLL-06-303:** `If a user attempts to apply an organization-level label to an issue in a repository outside that organization, then the system shall reject the application.`
+- **COLL-06-304:** `If a label template initialization is requested but no templates are available, then the system shall display an appropriate message.`
 
 ---
 
@@ -238,6 +237,8 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 ## 8. Notifications (COLL-08)
 
 **User Story:** As a user, I want to receive and manage notifications about activity across repositories so that I can stay informed about relevant changes.
+
+> **Scope note:** This section documents collaboration-specific notification triggers and the in-app notification UI. The notification infrastructure (event bus / `services/notify` dispatcher that fans out to mailer, webhook, indexer, mirror, and automerge notifiers) is documented in Domain 07 (Platform Services).
 
 #### Ubiquitous Requirements (Notification Properties)
 
@@ -454,6 +455,73 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 ---
 
+## 15. Issue/PR Search (COLL-15)
+
+**User Story:** As a contributor, I want to search issues and pull requests across repositories with advanced filters so that I can find relevant work items quickly.
+
+> **Scope note:** This section documents the issue/PR search capability (UI and query semantics). Indexer backends and infrastructure configuration are documented in Domain 08 (Administration & Operations).
+
+#### Ubiquitous Requirements (Issue Search Properties)
+
+- **COLL-15-001:** `The system shall support searching issues and pull requests across repositories accessible to the authenticated user.`
+- **COLL-15-002:** `The system shall support state filters: open, closed, and all.`
+- **COLL-15-003:** `The system shall support filtering by labels (comma-separated label names), milestones (by name), assignee, author, and mention.`
+- **COLL-15-004:** `The system shall support filtering by type to restrict results to issues only or pull requests only.`
+- **COLL-15-005:** `The system shall support time range filters using since and before date parameters.`
+- **COLL-15-006:** `The system shall support the following sort options: oldest, recent update, least update, most comment, least comment, priority, near due date, far due date, and priority repo.`
+- **COLL-15-007:** `The system shall expose issue/PR search via the API endpoint GET /repos/issues/search with all filter and sort parameters.`
+
+#### Event-Driven Requirements (Issue Search Workflow)
+
+- **COLL-15-101:** `When a user navigates to GET /issues, the system shall display all issues across repositories where the user has access, filtered by the selected criteria.`
+- **COLL-15-102:** `When a user navigates to GET /pulls, the system shall display all pull requests across repositories where the user has access, filtered by the selected criteria.`
+- **COLL-15-103:** `When a user applies the "review requested" filter, the system shall show issues and PRs where a code review has been requested from the current user.`
+- **COLL-15-104:** `When a user applies the "reviewed by" filter, the system shall show issues and PRs that the current user has reviewed.`
+- **COLL-15-105:** `When a user applies an owner/team filter, the system shall restrict results to repositories owned by the specified owner or accessible to the specified team.`
+- **COLL-15-106:** `When a user submits an issue query with an empty keyword, the system shall bypass the configured indexer and use the database backend directly to ensure consistent listing.`
+
+#### Optional Feature Requirements (Issue Indexer Backend)
+
+- **COLL-15-201:** `Where ISSUE_INDEXER_TYPE is set to elasticsearch, the system shall use Elasticsearch as the issue search backend.`
+- **COLL-15-202:** `Where ISSUE_INDEXER_TYPE is set to meilisearch, the system shall use Meilisearch as the issue search backend.`
+- **COLL-15-203:** `Where ISSUE_INDEXER_TYPE is set to db, the system shall use database-based issue search without an external indexer.`
+
+#### Unwanted Behaviour Requirements (Issue Search Errors)
+
+- **COLL-15-301:** `If a user searches issues in a repository where they lack read access, then the system shall exclude that repository's issues from results.`
+- **COLL-15-302:** `If an invalid label name is specified in the filter, then the system shall return an empty result set for that label criterion.`
+- **COLL-15-303:** `If the issue indexer backend is unreachable, then the system shall fall back to database-based issue search.`
+
+---
+
+## 16. Search Candidates Autocomplete (COLL-16)
+
+**User Story:** As a user, I want a fast typeahead search for other users when composing @mentions or selecting collaborators so that I can find the right person without leaving the form.
+
+#### Ubiquitous Requirements (Autocomplete Properties)
+
+- **COLL-16-001:** `The system shall expose a GET /user/search_candidates endpoint that performs a single global SearchUsers query with no repository context and no mode distinction (no separate mention/assignee modes).`
+- **COLL-16-002:** `The system shall search only active individual users (UserTypeIndividual, IsActive=true); organizations and bots are excluded.`
+- **COLL-16-003:** `The system shall return matching user ID, login name, full name, and avatar URL in the response payload via convert.ToUsers.`
+- **COLL-16-004:** `The system shall apply BuildCanSeeUserCondition visibility scoping: admins see all users; non-restricted authenticated users see public and limited-visibility users plus orgs they belong to; restricted users see only orgs they belong to and themselves; anonymous users see only public users.`
+
+#### Event-Driven Requirements (Autocomplete Workflow)
+
+- **COLL-16-101:** `When a user types into a typeahead field, the system shall query matching users and return up to setting.UI.MembersPagingNum results (default 20); there is no minimum character threshold.`
+- **COLL-16-102:** `When an admin requests candidates, the system shall return all matching active individual users regardless of visibility level.`
+- **COLL-16-103:** `When a non-admin requests candidates, the system shall exclude private-visibility users and private orgs they are not a member of from the results.`
+
+#### Optional Feature Requirements (Autocomplete Configuration)
+
+- **COLL-16-201:** `Where a user's visibility is set to private, the system shall exclude that user from candidate results for all viewers except the user themselves and admins.`
+
+#### Unwanted Behaviour Requirements (Autocomplete Errors)
+
+- **COLL-16-301:** `If a query matches more than setting.UI.MembersPagingNum users, then the system shall return only the first page of results with no incomplete flag in the response payload.`
+- **COLL-16-302:** `If the query string is empty, then the system shall still query the database and return matching users (no short-query suppression).`
+
+---
+
 ## Configuration Reference
 
 The following `[service]` configuration keys govern collaboration behavior in v1.22.x:
@@ -471,20 +539,20 @@ The following `[service]` configuration keys govern collaboration behavior in v1
 
 ## Business Rules
 
-- **BR-02-001:** Issue and PR numbers share a single sequential counter per repository and are never reused after deletion.
-- **BR-02-002:** Issues are permanently deleted; deleted issues and all associated data are removed from the database.
-- **BR-02-003:** PR merge strategy selection is available to users with write permission; repository settings may restrict which strategies are permitted. Six strategies are supported: merge commit, squash, rebase, rebase-merge, fast-forward-only, and manually merged.
-- **BR-02-004:** Wiki content is stored as a separate Git repository and is fully cloneable with standard Git tools.
-- **BR-02-005:** Project cards are references to issues and PRs, not copies; changes to the underlying issue or PR are reflected on the card.
-- **BR-02-006:** Milestone progress is auto-calculated as closed_issues / total_issues assigned to the milestone.
-- **BR-02-007:** Exclusive/scoped labels (format "scope/name") enforce at most one label per scope on a given issue or PR.
-- **BR-02-008:** Each user may have at most one reaction of a given emoji type per reactable item.
-- **BR-02-009:** A user may have at most one active stopwatch at a time across all issues and repositories.
-- **BR-02-010:** Notification delivery respects the user's subscription mode and the repository's watch configuration.
-- **BR-02-011:** WIP/draft PRs cannot be merged regardless of user permissions.
-- **BR-02-012:** Comment editing is restricted to the original author, repository owner, or admin.
-- **BR-02-013:** Auto-merge scheduling does not verify that any status check or approval rule is configured; it queues the PR unconditionally within the scheduling transaction.
-- **BR-02-014:** Fork PRs cannot access Actions secrets from the target repository.
+- **BR-04-001:** Issue and PR numbers share a single sequential counter per repository and are never reused after deletion.
+- **BR-04-002:** Issues are permanently deleted; deleted issues and all associated data are removed from the database.
+- **BR-04-003:** PR merge strategy selection is available to users with write permission; repository settings may restrict which strategies are permitted. Six strategies are supported: merge commit, squash, rebase, rebase-merge, fast-forward-only, and manually merged.
+- **BR-04-004:** Project cards are references to issues and PRs, not copies; changes to the underlying issue or PR are reflected on the card.
+- **BR-04-005:** Milestone progress is auto-calculated as closed_issues / total_issues assigned to the milestone.
+- **BR-04-006:** Exclusive/scoped labels (format "scope/name") enforce at most one label per scope on a given issue or PR. Labels span both repository and organization scope.
+- **BR-04-007:** Each user may have at most one reaction of a given emoji type per reactable item.
+- **BR-04-008:** A user may have at most one active stopwatch at a time across all issues and repositories.
+- **BR-04-009:** Notification delivery respects the user's subscription mode and the repository's watch configuration.
+- **BR-04-010:** WIP/draft PRs cannot be merged regardless of user permissions.
+- **BR-04-011:** Comment editing is restricted to the original author, repository owner, or admin.
+- **BR-04-012:** Auto-merge scheduling does not verify that any status check or approval rule is configured; it queues the PR unconditionally within the scheduling transaction.
+- **BR-04-013:** Fork PRs cannot access Actions secrets from the target repository.
+- **BR-04-014:** Agit flow requires write permission on the target repository.
 
 ## Edge Cases & Error Handling
 
@@ -496,7 +564,6 @@ The following `[service]` configuration keys govern collaboration behavior in v1
 | Start second stopwatch while one is active | Reject, prompt user to stop existing stopwatch first |
 | Apply exclusive label when one from same scope exists | Replace existing scoped label with new one |
 | Create circular issue dependency | Reject dependency creation |
-| Wiki page name collision with _Sidebar/_Footer | Treat as navigation element, not regular page |
 | Delete project column with cards remaining | Auto-move cards to default column, then delete; default column cannot be deleted |
 | PR base branch diverged from head | Warn user, suggest updating base into head |
 | Auto-merge when checks never complete | PR remains queued until checks resolve or auto-merge is cancelled |
@@ -504,13 +571,16 @@ The following `[service]` configuration keys govern collaboration behavior in v1
 | Mention user who has ignored the repository | Do not create notification for that user |
 | Upload attachment exceeding max file size | Reject upload with size limit error |
 | Edit another user's comment (non-admin) | Deny operation with permission error |
-| External wiki configured on repository | Redirect wiki tab to the external URL |
+| Agit push to non-existent base branch | Push rejected with error message |
+| Update an org-level label in active use | Propagate the change to all issues and PRs using that label |
+| Delete an org-level label in active use | Remove label from all referencing issues and pull requests |
+| Archive (soft-delete) an org-level label | Hide from label selection UI; preserve existing usage on issues/PRs |
+| Request label template init with no templates | Display an appropriate message |
 
 ## Success Criteria
 
 - Issue creation completes within 2 seconds for standard markdown bodies
 - PR diff computation completes within 5 seconds for changes up to 1000 files
-- Wiki page rendering completes within 1 second per page
 - Project board with 200 cards loads within 3 seconds
 - Milestone progress calculation is real-time and reflects issue state changes immediately
 - Label filtering on issue lists returns results within 1 second for repositories with up to 10,000 issues
@@ -519,3 +589,4 @@ The following `[service]` configuration keys govern collaboration behavior in v1
 - Stopwatch time tracking is accurate to within 1 second
 - Comment rendering with markdown, mentions, and cross-references completes within 500ms
 - Reaction add/remove operations complete within 200ms
+- Issue/PR cross-repository search returns results within 3 seconds for typical filter combinations
