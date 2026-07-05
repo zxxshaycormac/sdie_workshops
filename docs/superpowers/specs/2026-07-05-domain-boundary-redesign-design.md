@@ -55,14 +55,14 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 | 03 | Repository & Code | Features that manage the source code artifact and its git lifecycle | Code-vs-Collab tie → goes here |
 | 04 | Collaboration | Features that enable human workflow on top of repositories | — |
 | 05 | CI/CD & Automation | Features that automate the build/test/delivery pipeline on the server | — |
-| 06 | Packages & Artifacts | Features that store and distribute software artifacts | — |
+| 06 | Packages & Releases | Features that store and distribute published software artifacts (not CI-produced) | CI/CD-vs-Packages tie → goes here |
 | 07 | Platform Services | Cross-cutting services and external interfaces that serve all domains | Catch-all of last resort |
 | 08 | Administration & Operations | Instance-level management not tied to a specific product feature | — |
 
 **Disambiguation rules:**
 - Identity vs Access Control: if the feature's value is "establishing who you are" → 01; if the value is "governing what you can do" → 02
 - Repository vs Collaboration: if it operates on the git artifact itself → 03; if it's a human workflow layered on top → 04
-- CI/CD vs Packages: if it automates build/test → 05; if it stores/distributes output → 06
+- CI/CD vs Packages: if it automates build/test → 05; if it stores/distributes published output (packages, releases, LFS) → 06; Actions-produced artifacts/logs stay in 05
 - Feature vs Platform: if it's a user-facing product capability → its feature domain; if it's a shared service consumed by multiple domains → 07
 
 ### 3.2 Domain Definitions
@@ -71,7 +71,7 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 
 **Purpose:** Individual identity and the mechanisms by which a user proves who they are.
 
-**Features:** User registration, profile management, email management, password management, session management, access tokens, 2FA (TOTP), WebAuthn/Passkey, external authentication sources (LDAP, SMTP, PAM, DLDAP, SSPI), OpenID consumer, OAuth2 client login (16 providers), OAuth2 Provider (authorization server), SSH keys, activity heatmap, user visibility, user rename & deletion, CAPTCHA, avatars, badges.
+**Features:** User registration, profile management, email management, password management, session management, access tokens, 2FA (TOTP), WebAuthn/Passkey, external authentication sources (LDAP, SMTP, PAM, DLDAP, SSPI), OpenID consumer, OAuth2 client login (16 providers), OAuth2 Provider (authorization server), SSH keys, activity heatmap, user visibility, user following, user rename & deletion, CAPTCHA, avatars, badges.
 
 **Codebase anchor:** `services/user`, `services/auth`, `models/user`, `models/auth`, `services/externalaccount`
 
@@ -81,7 +81,7 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 
 **Purpose:** Permission governance and collective identity management — who can do what, and how teams are organized.
 
-**Features:** RBAC permission system (5 levels, unit permissions), organizations (creation, settings, deletion), teams (membership, unit permissions, invites), collaborators (repo-level access), deploy keys, user/org blocking (creation + enforcement), GPG keys (commit trust verification, trust models), org labels, restricted users.
+**Features:** RBAC permission system (5 levels, unit permissions), organizations (creation, settings, deletion), teams (membership, unit permissions, invites), collaborators (repo-level access), deploy keys, user/org blocking (creation + enforcement), GPG keys (commit trust verification, trust models), restricted users.
 
 **Codebase anchor:** `services/org`, `models/organization`, `models/perm`, `services/asymkey`, `models/asymkey`
 
@@ -91,7 +91,9 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 
 **Purpose:** The source code artifact lifecycle — from creation through browsing, editing, and migration.
 
-**Features:** Repo CRUD, repo transfer, forking, mirroring, adoption, git operations (branches, tags, protected branches), code browsing, web editor, blame, diff, repo migration/import, topics, starring, watching, wiki (as git repository), repo activity, code frequency. Repo search and code search are documented here as capabilities of this domain.
+**Features:** Repo CRUD, repo transfer, forking, mirroring, adoption, repo templates (IsTemplate, generate-from-template), git operations (branches, tags, protected branches), code browsing, web editor, blame, diff, repo migration/import, topics, starring, watching, wiki (as git repository), repo activity, code frequency. Repo search and code search are documented here as capabilities of this domain.
+
+**Protected branch cross-references:** Protected branch configuration lives here as a git concept, but its rules reference other domains: "required approvals" → Domain 04 (Collaboration), "required status checks" → Domain 05 (CI/CD), "push access restrictions" → Domain 02 (Access Control).
 
 **Codebase anchor:** `services/repository`, `modules/git`, `services/mirror`, `services/migrations`, `services/wiki`
 
@@ -101,7 +103,7 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 
 **Purpose:** Human collaboration workflows layered on top of repositories.
 
-**Features:** Issues, labels, milestones, dependencies, pull requests (review workflow, merge, auto-merge), projects (all scopes: repo/org/user), comments, reactions, content history, CODEOWNERS, issue close keywords, timetracking, notifications (in-app + email triggers), agit flow. Issue/PR search is documented here as a capability of this domain.
+**Features:** Issues, labels (repo + org scope), milestones, dependencies, pull requests (review workflow, merge, auto-merge), projects (all scopes: repo/org/user), comments, reactions, content history, CODEOWNERS, issue close keywords, timetracking, collaboration notification triggers and in-app UI (the notification event bus infrastructure itself → Domain 07), agit flow. Issue/PR search is documented here as a capability of this domain.
 
 **Codebase anchor:** `services/issue`, `services/pull`, `services/notify`, `services/uinotification`, `services/automerge`, `services/agit`, `models/issues`, `models/project`
 
@@ -111,27 +113,27 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 
 **Purpose:** The server-side automation pipeline for building, testing, and integrating code.
 
-**Features:** Gitea Actions (workflows, runners, tasks, schedules), Actions secrets, Actions variables, Actions artifacts, Actions log storage, webhooks (delivery, types, host allowlist, proxy), git hooks (server-side pre-receive/post-receive etc.), commit status.
+**Features:** Gitea Actions (workflows, runners, tasks, schedules), Actions secrets, Actions variables, Actions artifacts, Actions log storage, webhooks (delivery, types, host allowlist, proxy), git hooks (server-side pre-receive/post-receive etc.), commit status. Actions artifacts and logs are CI-produced outputs that stay in this domain, distinct from published packages/releases in Domain 06.
 
 **Codebase anchor:** `services/actions`, `services/webhook`, `services/secrets`, `models/actions`, `models/webhook`
 
 **Boundary — what's OUT:** Package registry → 06; releases → 06; cron/queues infrastructure → 08; agit flow (human PR creation) → 04.
 
-#### Domain 06: Packages & Artifacts
+#### Domain 06: Packages & Releases
 
-**Purpose:** Storage and distribution of software artifacts.
+**Purpose:** Storage and distribution of published software artifacts.
 
-**Features:** Package registry (21 types), container registry (OCI v2 endpoint), releases (draft, prerelease, tag), LFS, attachments, storage backends (local, MinIO).
+**Features:** Package registry (21 types), container registry (OCI v2 endpoint), releases (draft, prerelease, tag), LFS, attachments. Storage backend configuration → Domain 08; storage usage by packages/LFS/attachments is documented here.
 
-**Codebase anchor:** `services/packages`, `services/lfs`, `services/release`, `services/attachment`, `modules/storage`, `models/packages`
+**Codebase anchor:** `services/packages`, `services/lfs`, `services/release`, `services/attachment`, `models/packages`
 
-**Boundary — what's OUT:** Actions artifacts/logs → 05; repo creation → 03; commit status → 05.
+**Boundary — what's OUT:** Actions artifacts/logs → 05; repo creation → 03; commit status → 05; storage backend configuration → 08.
 
 #### Domain 07: Platform Services
 
 **Purpose:** Cross-cutting services and external interfaces consumed by all other domains.
 
-**Features:** REST API (Swagger, scopes, pagination), federation (ActivityPub, WebFinger, NodeInfo), markup renderers (Markdown, Org, CSV, Asciicast, Console, external), RSS/Atom feeds, SSE (/user/events), email (mailer transport), SSH server, themes, custom assets, i18n, proxy, camo.
+**Features:** REST API (Swagger, scopes, pagination), federation (ActivityPub, WebFinger, NodeInfo), markup renderers (Markdown, Org, CSV, Asciicast, Console, external), RSS/Atom feeds, SSE (/user/events), notification infrastructure (event bus / `services/notify` dispatcher — each domain documents its own notification triggers), email (mailer transport), SSH server, git transport (HTTP smart protocol, SSH git commands), themes, custom assets, i18n, proxy, camo.
 
 **Codebase anchor:** `routers/api/v1`, `services/mailer`, `services/markup`, `services/feed`, `modules/ssh`, `modules/translation`, `services/webtheme`
 
@@ -143,9 +145,9 @@ Each domain has a single boundary rule — a one-sentence test that determines u
 
 **Purpose:** Instance-level management capabilities not tied to a specific product feature.
 
-**Features:** Admin panel, user/org/repo administration, configuration (app.ini system), DB migrations, backup/restore (dump), logging, process management, queues (infrastructure), cron (infrastructure), metrics, health checks, pprof, doctor checks (~27), CLI surface, indexer system (search backends: Bleve/Elasticsearch/Meilisearch/db), sitemaps, update checker.
+**Features:** Admin panel, user/org/repo administration, configuration (app.ini system), DB migrations, backup/restore (dump), logging, process management, storage backends (configuration: local, MinIO — consumed by avatars, packages, LFS, attachments, Actions artifacts), queues (infrastructure), cron (infrastructure), metrics, health checks, pprof, doctor checks (~27), CLI surface, indexer system (search backends: Bleve/Elasticsearch/Meilisearch/db), sitemaps, update checker.
 
-**Codebase anchor:** `routers/admin`, `services/doctor`, `services/cron`, `services/indexer`, `modules/queue`, `cmd/`
+**Codebase anchor:** `routers/admin`, `services/doctor`, `services/cron`, `services/indexer`, `modules/queue`, `modules/storage`, `cmd/`
 
 **Boundary — what's OUT:** Search UI for specific domains → documented within those domains; repo admin actions → 03; user admin actions → 01.
 
@@ -182,8 +184,14 @@ Cron and queues are infrastructure — they serve Actions, webhooks, mailer, ind
 ### Search dissolved, not relocated
 Search is a capability, not a domain. Every domain has its own search. The indexer infrastructure is ops plumbing.
 
-### Notifications → Collaboration (04)
-Notifications are the communication channel for collaboration workflows. Email as a transport mechanism → Platform Services (07); notification triggers and UI → Collaboration (04).
+### Notifications → split between Collaboration (04) and Platform (07)
+The notification **infrastructure** (event bus, dispatcher, `services/notify`) is cross-cutting — 7 service packages implement notifiers (actions, webhook, mailer, uinotification, indexer, mirror, automerge). The mechanism → Platform Services (07); each domain documents its own notification triggers. Collaboration-specific notification triggers and in-app UI → Collaboration (04).
+
+### Storage → Administration (08), not Packages (06)
+Storage backends (local, MinIO) are infrastructure consumed by avatars (01), packages/LFS/attachments (06), Actions artifacts/logs (05), and repo archives (03). Storage configuration and management → Administration (08); storage usage by specific features → documented within those features' domains.
+
+### Org labels → Collaboration (04), not Access Control (02)
+Labels (both repo and org scope) are fundamentally a collaboration tool — applied to issues and PRs. Splitting labels by scope across two domains violates ME. All labels → Collaboration (04).
 
 ## 5. Migration Impact
 
@@ -211,7 +219,7 @@ openspec/specs/
   repository-code/spec.md              (03)
   collaboration/spec.md                (04)
   cicd-automation/spec.md              (05)
-  packages-artifacts/spec.md           (06)
+  packages-releases/spec.md            (06)
   platform-services/spec.md            (07)
   admin-ops/spec.md                    (08)
 ```
@@ -220,36 +228,39 @@ openspec/specs/
 
 | From (current) | To (new) | Features moved |
 |----------------|----------|----------------|
-| Identity & Access → 01 | Identity & Authentication | OAuth2 client, OAuth2 Provider, CAPTCHA, avatars, badges (from Integration/Org) |
+| Identity & Access → 01 | Identity & Authentication | OAuth2 client, OAuth2 Provider, CAPTCHA, avatars, badges (from Integration/Org), user following |
 | Identity & Access → 02 | Access Control & Organization | RBAC, blocking, GPG keys, restricted users |
-| Identity & Access → 07 | Platform Services | Federation |
+| Identity & Access → 07 | Platform Services | Federation, notification infrastructure |
 | Organization → 02 | Access Control & Organization | All org features merge into new domain 02 |
 | Organization → 01 | Identity & Authentication | Badges (user-account feature) |
+| Organization → 04 | Collaboration | Org labels (all labels unified) |
 | Code Management → 02 | Access Control & Organization | Collaborators, deploy keys |
-| Code Management → 03 | Repository & Code | Core repo features stay; wiki moves in from Collaboration |
+| Code Management → 03 | Repository & Code | Core repo features stay; wiki moves in from Collaboration; repo templates added |
 | Collaboration → 03 | Repository & Code | Wiki |
-| Collaboration → 04 | Collaboration | Core collab features stay; agit moves in from CI/CD |
+| Collaboration → 04 | Collaboration | Core collab features stay; agit moves in from CI/CD; org labels unified here |
+| Collaboration → 07 | Platform Services | Notification infrastructure (event bus) |
 | CI/CD → 04 | Collaboration | Agit flow |
 | CI/CD → 08 | Admin/Ops | Cron, queues |
 | Integration → 01 | Identity & Authentication | OAuth2 client, OAuth2 Provider, CAPTCHA, avatars |
-| Integration → 07 | Platform Services | REST API, markup, themes, SSH, email, i18n, feeds, proxy, camo |
+| Integration → 07 | Platform Services | REST API, markup, themes, SSH, email, i18n, feeds, proxy, camo, git transport |
 | Integration → 08 | Admin/Ops | Update checker |
+| Packages → 08 | Admin/Ops | Storage backend configuration |
 | Search & Discovery | DISSOLVED | Search UI → consuming domains; indexer infra → Admin/Ops |
 
 ### Domain Size Balance
 
 | Domain | ~Features | Codebase packages |
 |--------|-----------|-------------------|
-| 01 Identity & Authentication | 15 | 5 |
-| 02 Access Control & Organization | 10 | 5 |
-| 03 Repository & Code | 12 | 5 |
-| 04 Collaboration | 14 | 8 |
+| 01 Identity & Authentication | 16 | 5 |
+| 02 Access Control & Organization | 9 | 5 |
+| 03 Repository & Code | 13 | 5 |
+| 04 Collaboration | 15 | 8 |
 | 05 CI/CD & Automation | 7 | 5 |
-| 06 Packages & Artifacts | 6 | 6 |
-| 07 Platform Services | 11 | 7 |
-| 08 Administration & Operations | 13 | 6 |
+| 06 Packages & Releases | 5 | 5 |
+| 07 Platform Services | 13 | 8 |
+| 08 Administration & Operations | 14 | 7 |
 
-No domain exceeds 15 features. No domain has fewer than 6. The current largest (Identity: 17) shrinks; the current weakest (Organization: 8) grows by absorbing RBAC.
+No domain exceeds 16 features. No domain has fewer than 5. The current largest (Identity: 17) shrinks; the current weakest (Organization: 8) grows by absorbing RBAC.
 
 ## 6. Evaluation Against Triple Purpose
 
@@ -269,3 +280,18 @@ Each domain maps to 5-8 service packages in the codebase. The mapping is natural
 2. **Search documentation depth:** Since search is dissolved into consuming domains, each domain spec needs a search subsection. How much indexer-level detail belongs in Admin/Ops vs. the consuming domain?
 
 3. **Cross-domain contracts:** Features that span domains (e.g., protected branches use RBAC from domain 02 and git operations from domain 03) need explicit interface contracts. Should these be documented in both domains or in a separate contracts section?
+
+## 8. MECE Audit
+
+A systematic audit verified mutual exclusivity and collective exhaustivity. The following issues were identified and resolved:
+
+| # | Type | Issue | Resolution |
+|---|------|-------|------------|
+| ME-1 | Overlap | "Artifacts" in both 05 (Actions artifacts) and 06 (Packages & Artifacts name) | Renamed 06 → "Packages & Releases"; clarified Actions artifacts stay in 05 |
+| ME-2 | Overlap | Notification system in 04 but serves 7 domains | Notification infrastructure → 07; collaboration triggers → 04 |
+| ME-3 | Overlap | Storage backends in 06 but consumed by 01/03/05/06 | Storage configuration → 08; storage usage → consuming domains |
+| ME-4 | Overlap | Protected branches span 02/03/04/05 | Primary spec in 03 with explicit cross-references to 02/04/05 |
+| ME-5 | Overlap | Org labels in 02, repo labels in 04 — same feature split | All labels → 04 |
+| CE-1 | Gap | User following unplaced | → 01 (individual social action) |
+| CE-2 | Gap | Repo templates unplaced | → 03 (repo creation feature) |
+| CE-3 | Gap | Git wire protocol unplaced | → 07 (transport layer; git operations stay in 03) |
