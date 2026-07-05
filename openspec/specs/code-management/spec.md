@@ -11,13 +11,14 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 ### Ubiquitous Requirements (Repository Properties)
 
 - **REPO-01-001:** `The system shall assign each repository a unique combination of owner name and repository name.`
-- **REPO-01-002:** `The system shall support three repository visibility levels: public, private, and limited (authenticated users only).`
+- **REPO-01-002:** `The system shall support two repository visibility levels: public and private (IsPrivate bool). Three-level visibility (Public/Limited/Private) is a user/organization attribute that gates discovery and membership, not a repository attribute.`
 - **REPO-01-003:** `The system shall support four commit signature trust models: default, committer, collaborator, and collaborator-committer.`
 - **REPO-01-004:** `The system shall support two object formats for repository storage: SHA-1 and SHA-256.`
 - **REPO-01-005:** `The system shall store repositories under a configurable root path.`
 - **REPO-01-006:** `The system shall assign a configurable default branch name to newly created repositories.`
 - **REPO-01-007:** `The system shall reject repository names that match reserved names (".", "..", "-") or reserved patterns ("*.git", "*.wiki", "*.rss", "*.atom").`
 - **REPO-01-008:** `The system shall restrict repository names to alphanumeric characters, dots, and dashes.`
+- **REPO-01-009:** `The system shall support adoption of unadopted repositories (pre-existing bare Git directories on disk under ROOT without a database record) by administrators, importing them into the database.`
 
 ### Event-Driven Requirements (Repository Lifecycle)
 
@@ -54,9 +55,10 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 - **REPO-02-001:** `The system shall support Git operations over HTTP and SSH protocols (see INT-05 for SSH server details and INT-12 for Smart HTTP protocol details).`
 - **REPO-02-002:** `The system shall support HTTP basic authentication and token authentication for Git operations over HTTP.`
-- **REPO-02-003:** `The system shall provide archive downloads in zip and tar.gz formats for any branch, tag, or commit.`
+- **REPO-02-003:** `The system shall provide archive downloads in zip, tar.gz, and bundle formats for any branch, tag, or commit.`
 - **REPO-02-004:** `The system shall provide raw file downloads for individual files in the repository.`
 - **REPO-02-005:** `The system shall generate clone URLs for both HTTP and SSH protocols on the repository page.`
+- **REPO-02-006:** `The system shall expose each repository's wiki as a standalone Git repository cloneable via the .wiki suffix on the repository path (over HTTP and SSH).`
 
 ### Event-Driven Requirements (Git Protocol Workflow)
 
@@ -89,6 +91,7 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 - **REPO-03-001:** `The system shall allow each repository to have a configurable default branch.`
 - **REPO-03-002:** `The system shall support creating, renaming, and deleting branches.`
 - **REPO-03-003:** `The system shall support protected tags with configurable create and delete allowlists.`
+- **REPO-03-004:** `The system shall provide tag browsing and listing, including tag metadata (commit, signature, message) via the releases/tags UI and API.`
 
 ### Event-Driven Requirements (Branch Lifecycle)
 
@@ -143,8 +146,8 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 ### State-Driven Requirements (Display Limits)
 
-- **REPO-04-701:** `While a file exceeds the configured MAX_DISPLAY_FILE_SIZE, the system shall display a notice instead of rendering the file content.`
-- **REPO-04-702:** `While a file exceeds the configured RENDERED_MAX_FILE_SIZE, the system shall display the raw content instead of rendering markup.`
+- **REPO-04-701:** `While a file exceeds the configured MAX_DISPLAY_FILE_SIZE (setting.UI.MaxDisplayFileSize), the system shall display a notice instead of rendering the file content.`
+- **REPO-04-702:** *(removed — RENDERED_MAX_FILE_SIZE does not exist; only setting.UI.MaxDisplayFileSize governs display limits)*
 - **REPO-04-703:** `While a diff exceeds the configured MAX_GIT_DIFF_LINES, MAX_GIT_DIFF_LINE_CHARACTERS, or MAX_GIT_DIFF_FILES, the system shall truncate the diff display.`
 
 ### Unwanted Behaviour Requirements (Browsing Errors)
@@ -238,14 +241,14 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 ### Optional Feature Requirements (Mirror Configuration)
 
 - **REPO-07-201:** `Where LFS mirroring is enabled, the system shall synchronize LFS objects along with Git data during mirror operations.`
-- **REPO-07-202:** `Where ALLOW_LOCAL_NETWORKS is enabled, the system shall permit mirror URLs pointing to local network addresses.`
+- **REPO-07-202:** `Where ALLOW_LOCALNETWORKS is enabled in [migrations], the system shall permit mirror URLs pointing to local network addresses.`
 - **REPO-07-203:** `Where GitHub OAuth is configured for mirroring, the system shall use the OAuth token to authenticate against private GitHub repositories.`
 
 ### Unwanted Behaviour Requirements (Mirror Errors)
 
 - **REPO-07-301:** `If a mirror sync fails, then the system shall log the error and preserve the last successfully synced state.`
 - **REPO-07-302:** `If a mirror URL is invalid or unreachable, then the system shall report the failure and not modify the local repository.`
-- **REPO-07-303:** `If ALLOW_LOCAL_NETWORKS is disabled and a mirror URL points to a local network address, then the system shall reject the mirror configuration.`
+- **REPO-07-303:** `If ALLOW_LOCALNETWORKS is disabled in [migrations] and a mirror URL points to a local network address, then the system shall reject the mirror configuration.`
 - **REPO-07-304:** `If a user pushes to a pull-mirrored repository, the system shall reject the push.`
 
 ---
@@ -256,9 +259,10 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 ### Ubiquitous Requirements (Migration Sources)
 
-- **REPO-08-001:** `The system shall support migration from the following platforms: GitHub, GitLab, Gogs, OneDev, Codebase, GitBucket, and plain Git.`
+- **REPO-08-001:** `The system shall support migration from the following platforms: Gitea, GitHub, GitLab, Gogs, OneDev, Codebase, GitBucket, and plain Git.`
 - **REPO-08-002:** `The system shall migrate Git data (commits, branches, tags) as part of every migration.`
 - **REPO-08-003:** `The system shall track migration progress and report status to the user.`
+- **REPO-08-004:** `The system shall support backup dump (export) and restore (import) migration paths via the dump/restore downloader, allowing full repository export to an archive and subsequent import.`
 
 ### Event-Driven Requirements (Migration Workflow)
 
@@ -358,8 +362,9 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 ### Optional Feature Requirements (Watch Configuration)
 
-- **REPO-11-201:** `Where AUTO_WATCH_REPOS is enabled, the system shall automatically set watch mode to Normal when a user creates or forks a repository.`
+- **REPO-11-201:** `Where AUTO_WATCH_NEW_REPOS is enabled, the system shall automatically set watch mode to Normal when a user creates or forks a repository.`
 - **REPO-11-202:** `Where AUTO_WATCH_ON_CHANGES is enabled, the system shall automatically set watch mode to Normal when a user pushes to a repository.`
+- **REPO-11-203:** `Where DISABLE_STARS is enabled in [repository], the system shall disable the star feature instance-wide, hiding star UI and rejecting star operations.`
 
 ### Unwanted Behaviour Requirements (Star & Watch Errors)
 
@@ -406,14 +411,14 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 
 ### Ubiquitous Requirements (Anonymous Access Properties)
 
-- **REPO-13-001:** `The system shall permit unauthenticated git-upload-pack requests against any public repository (visibility = public, not private or limited).`
+- **REPO-13-001:** `The system shall permit unauthenticated git-upload-pack requests against any public repository (visibility = public, not private).`
 - **REPO-13-002:** `The system shall reject all unauthenticated git-receive-pack requests regardless of repository visibility.`
 - **REPO-13-003:** `The system shall treat any anonymous clone as if performed by a user with read-only permission.`
 
 ### Event-Driven Requirements (Anonymous Access Workflow)
 
 - **REPO-13-101:** `When an unauthenticated client initiates git-upload-pack on a public repository, the system shall serve the repository without prompting for credentials.`
-- **REPO-13-102:** `When an unauthenticated client initiates a Git operation on a private or limited-visibility repository, the system shall challenge with HTTP 401 and request credentials.`
+- **REPO-13-102:** `When an unauthenticated client initiates a Git operation on a private repository, the system shall challenge with HTTP 401 and request credentials.`
 - **REPO-13-103:** `When the organization owning a public repository has been marked as not publicly visible, the system shall reject anonymous pulls of that organization's repositories.`
 
 ### Optional Feature Requirements (Anonymous Access Configuration)
@@ -507,7 +512,7 @@ Baseline specification of Gitea's repository, Git operations, branching, code re
 ### Event-Driven Requirements (Activity Workflow)
 
 - **REPO-16-101:** `When a user navigates to /{owner}/{repo}/activity, the system shall render the activity dashboard for the default time window.`
-- **REPO-16-102:** `When a user selects a time period (daily, weekly, monthly), the system shall re-bucket and re-render the activity charts.`
+- **REPO-16-102:** `When a user selects a time period (daily, halfweekly, weekly, monthly, quarterly, semiyearly, or yearly), the system shall re-bucket and re-render the activity charts.`
 - **REPO-16-103:** `When a client requests /{owner}/{repo}/activity/code-frequency/data, the system shall return the code-frequency series as JSON.`
 - **REPO-16-104:** `When a client requests /{owner}/{repo}/activity/recent-commits/data, the system shall return the recent-commits series as JSON.`
 - **REPO-16-105:** `When a user navigates to /{owner}/{repo}/activity/authors, the system shall render the contributor breakdown with author filtering.`
@@ -531,22 +536,32 @@ The following INI sections configure code-management behaviors.
 ### [git] Section
 
 - **PATH**: Path to the git binary (default `git`).
-- **HOME_PATH**: Home directory used for git operations.
-- **DISABLE_DIFF_DIFF_TEXT**: Disable textual diff in web UI.
+- **HOME_PATH**: Home directory used for git operations (default `home`, resolved under AppDataPath).
+- **DISABLE_DIFF_HIGHLIGHT**: Disable syntax-highlighted diff rendering in the web UI (default `false`).
 - **MAX_GIT_DIFF_LINES**: Maximum lines per diff file before truncation (default 1000).
 - **MAX_GIT_DIFF_LINE_CHARACTERS**: Maximum characters per diff line (default 5000).
 - **MAX_GIT_DIFF_FILES**: Maximum files shown in a diff before truncation (default 100).
-- **COMMITS_FETCH_SIZE**: Number of commits to fetch per batch.
-- **VERBOSE_PUSH**: Render verbose push output when enabled.
-- **VERBOSE_PUSH_TIMEOUT**: Timeout for verbose push operations (seconds).
-- **CONCURRENT_CREATION_LIMIT**: Maximum concurrent git repository creation operations.
-- **CONCURRENT_MIGRATION_LIMIT**: Maximum concurrent migration operations.
+- **COMMITS_RANGE_SIZE**: Number of commits to fetch per batch/page (default 50).
+- **BRANCHES_RANGE_SIZE**: Number of branches to fetch per batch/page (default 20).
+- **VERBOSE_PUSH**: Render verbose push output when enabled (default `true`).
+- **VERBOSE_PUSH_DELAY**: Delay before verbose push output begins (default `5s`).
 - **GC_ARGS**: Arguments passed to `git gc` when invoked by Gitea.
-- **TIMEOUT_MIGRATE**: Migration timeout (seconds, default 600).
-- **TIMEOUT_CLONE**: Clone timeout (seconds, default 300).
-- **TIMEOUT_PULL**: Pull timeout (seconds, default 300).
-- **TIMEOUT_GC**: GC timeout (seconds, default 60).
-- **ENABLE_AUTO_GIT_WIKI**: Auto-initialize git wiki on first access.
+- **ENABLE_AUTO_GIT_WIRE_PROTOCOL**: Enable Git Wire Protocol (protocol v2) by default (default `true`).
+- **PULL_REQUEST_PUSH_MESSAGE**: Enable push messages for pull request operations (default `true`).
+- **LARGE_OBJECT_THRESHOLD**: Threshold above which objects are treated as large (default `1048576`).
+- **DISABLE_PARTIAL_CLONE**: Disable partial clone support (default `false`).
+- **DISABLE_CORE_PROTECT_NTFS**: Disable `core.protectNTFS` (default `false`).
+
+### [git.timeout] Section
+
+Nested under `[git]`, configures per-operation timeouts (all in seconds):
+
+- **DEFAULT**: Default git operation timeout (default 360).
+- **MIGRATE**: Migration timeout (default 600).
+- **MIRROR**: Mirror sync timeout (default 300).
+- **CLONE**: Clone timeout (default 300).
+- **PULL**: Pull timeout (default 300).
+- **GC**: Garbage collection timeout (default 60).
 
 ### [git.config] Section
 
@@ -557,9 +572,26 @@ Arbitrary `key=value` pairs written to the git config of each repository. Exampl
 
 ### [git.reflog] Section
 
-- **ENABLE**: Enable reflog retention on Gitea-managed repositories.
-- **EXPIRE**: Reflog expiry duration (default `90d`).
-- **EXPIRE_UNREACHABLE**: Expiry for unreachable reflog entries (default `30d`).
+Deprecated since v1.21. Keys are remapped to `[git.config]` entries:
+
+- **ENABLED**: *(deprecated, since v1.21)* → remapped to `[git.config]` `core.logAllRefUpdates`.
+- **EXPIRATION**: *(deprecated, since v1.21)* → remapped to `[git.config]` `gc.reflogExpire`.
+
+Use `[git.config]` directly to set `core.logAllRefUpdates` (default `true`) and `gc.reflogExpire` (default `90`).
+
+### [repository] Section
+
+- **ROOT**: Absolute or relative path under which all repository Git data is stored (default `<AppDataPath>/gitea-repositories`).
+- **DEFAULT_PRIVATE**: Default visibility for new repositories (`private`, `public`, `last`; default `last`).
+- **FORCE_PRIVATE**: Force all new repositories to be private (default `false`).
+- **MAX_CREATION_LIMIT**: Global per-user repository creation limit (default `-1` = unlimited).
+- **DEFAULT_BRANCH**: Default branch name for new repositories (default `main`).
+- **DISABLE_HTTP_GIT**: Disable Git operations over HTTP (default `false`).
+- **USE_COMPAT_SSH_URI**: Generate SSH clone URLs in compatible `ssh://` format (default `false`).
+- **DISABLE_STARS**: Disable the star feature instance-wide (default `false`).
+- **DISABLE_MIGRATIONS**: Disable repository migration (default `false`).
+- **ALLOW_ADOPTION_OF_UNADOPTED_REPOSITORIES**: Allow admins to adopt unadopted repositories (default `false`).
+- **ALLOW_DELETE_OF_UNADOPTED_REPOSITORIES**: Allow admins to delete unadopted repositories (default `false`).
 
 ### [repository.upload] Section
 
@@ -578,6 +610,27 @@ Arbitrary `key=value` pairs written to the git config of each repository. Exampl
 - **WORK_IN_PROGRESS_PREFIXES**: Comma-separated title prefixes treated as WIP markers (default `WIP:,[WIP]`).
 - **CLOSE_KEYWORDS**: Comma-separated keywords that auto-close issues when used in PR body or merge commit.
 - **REOPEN_KEYWORDS**: Comma-separated keywords that auto-reopen issues.
+
+### [mirror] Section
+
+- **ENABLED**: Enable the mirror feature (default `true`). When disabled, both pull and push mirror creation are blocked.
+- **DISABLE_NEW_PULL**: Disable creation of new pull mirrors (default `false`).
+- **DISABLE_NEW_PUSH**: Disable creation of new push mirrors (default `false`).
+- **DEFAULT_INTERVAL**: Default sync interval for new pull mirrors (default `8h`).
+- **MIN_INTERVAL**: Minimum allowed sync interval for pull mirrors (default `10m`).
+
+### [migrations] Section
+
+- **MAX_ATTEMPTS**: Maximum retry attempts for migration operations (default 3).
+- **RETRY_BACKOFF**: Backoff in seconds between retry attempts (default 3).
+- **ALLOWED_DOMAINS**: Comma-separated allowlist of domains permitted as migration/mirror sources (default empty = allow all).
+- **BLOCKED_DOMAINS**: Comma-separated blocklist of domains forbidden as migration/mirror sources (default empty).
+- **ALLOW_LOCALNETWORKS**: Permit migration/mirror URLs pointing to local network addresses (default `false`).
+- **SKIP_TLS_VERIFY**: Skip TLS certificate verification when fetching from migration sources (default `false`).
+
+### [ui] Section
+
+- **MAX_DISPLAY_FILE_SIZE**: Maximum file size (in bytes) for inline rendering in the file viewer (default `8388608` = 8 MB). This is the sole display-size limit; there is no separate `RENDERED_MAX_FILE_SIZE`.
 
 ---
 
