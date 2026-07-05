@@ -29,6 +29,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-01-107:** `When a user unlocks a previously locked issue, the system shall restore commenting ability for all permitted users.`
 - **COLL-01-108:** `When a user edits an issue body, the system shall preserve the previous content in the content history.`
 - **COLL-01-109:** `When a user creates an issue using an issue template, the system shall pre-populate the issue body with the template content.`
+- **COLL-01-110:** `When a user renames a pull request title from a WIP-prefixed title to a non-WIP title, the system shall automatically trigger CODEOWNERS-based review requests.`
 
 #### Optional Feature Requirements (Issue Dependencies)
 
@@ -81,7 +82,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 - **COLL-02-201:** `Where a PR template exists in .gitea/ or .github/, the system shall pre-populate the PR body with the template content.`
 - **COLL-02-202:** `Where branch protection rules require signed commits, the system shall verify commit signatures before allowing merge.`
-- **COLL-02-203:** `Where auto-merge is configured with at least one check or approval requirement, the system shall queue the PR for automatic merge.`
+- **COLL-02-203:** `Where auto-merge is enabled on a PR, the system shall queue the PR for automatic merge regardless of whether status checks or approval rules are currently configured.`
 
 #### Unwanted Behaviour Requirements (PR Errors)
 
@@ -135,7 +136,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 #### Event-Driven Requirements (Project Lifecycle)
 
-- **COLL-04-101:** `When a user creates a new project, the system shall initialize it with default columns: To Do, In Progress, and Done.`
+- **COLL-04-101:** `When a user creates a new project, the system shall initialize columns based on BoardType: BasicKanban creates To Do, In Progress, Done (plus a default Backlog column); BugTriage creates Needs Triage, High Priority, Low Priority, Closed (plus a default Backlog column); None (the default) creates no columns.`
 - **COLL-04-102:** `When a user adds a column to a project, the system shall append it to the column list.`
 - **COLL-04-103:** `When a user moves a card between columns, the system shall update the card's column assignment and sort position.`
 - **COLL-04-104:** `When a user reorders columns, the system shall persist the new column ordering.`
@@ -146,7 +147,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 #### Unwanted Behaviour Requirements (Project Errors)
 
 - **COLL-04-301:** `If a user without project management permission attempts to modify a project board, then the system shall deny the operation.`
-- **COLL-04-302:** `If a user attempts to delete a column that still contains cards, then the system shall require the user to move or remove the cards first.`
+- **COLL-04-302:** `If a user attempts to delete a column that still contains cards, then the system shall automatically move the cards to the default column, then delete the column. The default column cannot be deleted.`
 - **COLL-04-303:** `If a user attempts to add a card for an issue or PR from a different repository to a repository-scoped project, then the system shall reject the addition.`
 
 ---
@@ -261,7 +262,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 - **COLL-08-201:** `Where ENABLE_NOTIFY_MAIL is enabled, the system shall send email notifications for subscribed events.`
 - **COLL-08-202:** `Where AUTO_WATCH_ON_CHANGES is enabled, the system shall automatically watch repositories when a user pushes to them.`
-- **COLL-08-203:** `Where AUTO_WATCH_REPOS is enabled, the system shall automatically watch repositories when a user creates or forks them.`
+- **COLL-08-203:** `Where AUTO_WATCH_NEW_REPOS is enabled, the system shall automatically watch repositories when a user creates or forks them.`
 
 #### Unwanted Behaviour Requirements (Notification Errors)
 
@@ -278,7 +279,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 - **COLL-09-001:** `The system shall require the Issues unit to be enabled for time tracking features to be available.`
 - **COLL-09-002:** `The system shall allow at most one active stopwatch per user at any time.`
-- **COLL-09-003:** `The system shall store tracked time entries with the following properties: user, duration, creation timestamp, and optional description.`
+- **COLL-09-003:** `The system shall store tracked time entries with the following properties: user, duration, and creation timestamp.`
 
 #### Event-Driven Requirements (Timetracking Lifecycle)
 
@@ -286,7 +287,6 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-09-102:** `When a user stops a stopwatch on an issue, the system shall compute the elapsed time and create a tracked time entry.`
 - **COLL-09-103:** `When a user manually adds time to an issue, the system shall create a tracked time entry with the specified duration and description.`
 - **COLL-09-104:** `When a user deletes a tracked time entry, the system shall remove it and update the issue's total time.`
-- **COLL-09-105:** `When a user sets a time estimate on an issue, the system shall store the estimate and display it alongside the tracked time.`
 
 #### Unwanted Behaviour Requirements (Timetracking Errors)
 
@@ -336,7 +336,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 #### Ubiquitous Requirements (CODEOWNERS Properties)
 
-- **COLL-11-001:** `The system shall recognize a CODEOWNERS file at any of the following paths: ./CODEOWNERS, ./docs/CODEOWNERS, ./.github/CODEOWNERS, ./.gitea/CODEOWNERS.`
+- **COLL-11-001:** `The system shall recognize a CODEOWNERS file at any of the following paths: ./CODEOWNERS, ./docs/CODEOWNERS, ./.gitea/CODEOWNERS.`
 - **COLL-11-002:** `The system shall parse CODEOWNERS rules as path-glob patterns mapped to one or more owner entries.`
 - **COLL-11-003:** `The system shall resolve owner entries as individual usernames, team slugs (for organization repositories), or email addresses.`
 - **COLL-11-004:** `The system shall apply the last matching rule when multiple CODEOWNERS rules match the same path.`
@@ -358,6 +358,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-11-301:** `If a CODEOWNERS file contains a malformed glob pattern, then the system shall skip the offending rule and log a warning.`
 - **COLL-11-302:** `If a CODEOWNERS rule references a user who lacks read access to the repository, then the system shall not request a review from that user.`
 - **COLL-11-303:** `If a pull request touches paths not covered by any CODEOWNERS rule, then the system shall not add any owner-based review requests.`
+- **COLL-11-304:** `If a pull request originates from a fork of the base repository, then the system shall skip CODEOWNERS-based review requests entirely.`
 
 ---
 
@@ -422,6 +423,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **COLL-13-302:** `If a user attempts to request a reviewer who is blocked by the repository owner, then the system shall deny the request.`
 - **COLL-13-303:** `If a user attempts to request themselves as a reviewer, then the system shall reject the request.`
 - **COLL-13-304:** `If a user requests a team review on a non-organization repository, then the system shall reject the request.`
+- **COLL-13-305:** `If a user attempts to dismiss a review on a closed or merged pull request, then the system shall return ErrDismissRequestOnClosedPR and deny the dismissal.`
 
 ---
 
@@ -432,8 +434,9 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 #### Ubiquitous Requirements (Content History Properties)
 
 - **COLL-14-001:** `The system shall record a content-history entry for every edit to an issue body or comment body.`
-- **COLL-14-002:** `The system shall store per-entry: author, timestamp, previous content hash, and new content hash.`
+- **COLL-14-002:** `The system shall store per-entry: full previous content text (ContentText), author, timestamp, and IsFirstCreated/IsDeleted flags.`
 - **COLL-14-003:** `The system shall retain soft-deleted history entries distinct from hard-deleted entries.`
+- **COLL-14-004:** `The system shall retain at most 20 content-history revisions per issue or comment, hard-deleting the oldest revisions beyond that cap.`
 
 #### Event-Driven Requirements (Content History Workflow)
 
@@ -451,6 +454,21 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 
 ---
 
+## Configuration Reference
+
+The following `[service]` configuration keys govern collaboration behavior in v1.22.x:
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `ENABLE_TIMETRACKING` | `true` | Master switch for time-tracking features (`modules/setting/service.go:183`). |
+| `DEFAULT_ENABLE_TIMETRACKING` | `true` | Default value of the per-repo time-tracking toggle (only read when `ENABLE_TIMETRACKING` is true). |
+| `DEFAULT_ENABLE_DEPENDENCIES` | `true` | Default value of the per-repo issue-dependencies toggle (`modules/setting/service.go:187`). |
+| `ENABLE_NOTIFY_MAIL` | `false` | Send email notifications for subscribed events. |
+| `AUTO_WATCH_NEW_REPOS` | `true` | Auto-watch repositories a user creates or forks. |
+| `AUTO_WATCH_ON_CHANGES` | `false` | Auto-watch repositories a user pushes to. |
+
+---
+
 ## Business Rules
 
 - **BR-02-001:** Issue and PR numbers share a single sequential counter per repository and are never reused after deletion.
@@ -465,7 +483,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 - **BR-02-010:** Notification delivery respects the user's subscription mode and the repository's watch configuration.
 - **BR-02-011:** WIP/draft PRs cannot be merged regardless of user permissions.
 - **BR-02-012:** Comment editing is restricted to the original author, repository owner, or admin.
-- **BR-02-013:** Auto-merge requires at least one status check or approval rule to be configured.
+- **BR-02-013:** Auto-merge scheduling does not verify that any status check or approval rule is configured; it queues the PR unconditionally within the scheduling transaction.
 - **BR-02-014:** Fork PRs cannot access Actions secrets from the target repository.
 
 ## Edge Cases & Error Handling
@@ -479,7 +497,7 @@ Baseline specification of Gitea's collaboration subsystems: issues, pull request
 | Apply exclusive label when one from same scope exists | Replace existing scoped label with new one |
 | Create circular issue dependency | Reject dependency creation |
 | Wiki page name collision with _Sidebar/_Footer | Treat as navigation element, not regular page |
-| Delete project column with cards remaining | Require moving or removing cards first |
+| Delete project column with cards remaining | Auto-move cards to default column, then delete; default column cannot be deleted |
 | PR base branch diverged from head | Warn user, suggest updating base into head |
 | Auto-merge when checks never complete | PR remains queued until checks resolve or auto-merge is cancelled |
 | Add duplicate reaction (same user, emoji, item) | Reject the addition silently |
