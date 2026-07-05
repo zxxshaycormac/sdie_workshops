@@ -58,3 +58,7 @@ Workshops build Harness assets incrementally:
 ## Workflow
 
 Workshops reference the Gitea source at `../` (parent directory). All PR/issue links point to `go-gitea/gitea` on GitHub. **Students must not look at the actual fix PRs** — each workshop is designed for guided discovery via Explore Agent and SDIE process.
+
+## Excluded: `NOLOOKINSIDE/`
+
+The `NOLOOKINSIDE/` folder (under `workshops/`) contains training reference samples. **Do NOT read, reference, search, or use any content from this folder** when working on workshop exercises or any task governed by this file. Treat it as if it does not exist. This ensures exercises are solved via the SDIE process rather than by copying provided samples.
