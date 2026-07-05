@@ -12,7 +12,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 
 - **UA-01-001:** `The system shall require a unique username for each user account.`
 - **UA-01-002:** `The system shall normalize usernames to lowercase for comparison.`
-- **UA-01-003:** `The system shall reject usernames that match reserved names including ".", "..", "admin", "api", "assets", "attachments", "avatar", "captcha", "debug", "error", "explore", "favicon.ico", "ghost", "issues", "login", "metrics", "new", "notifications", "org", "pulls", "raw", "repo", "robots.txt", "search", "serviceworker.js", "ssh_info", "swagger.v1.json", "user", "v2", "gitea-actions", and reserved patterns "*.keys", "*.gpg", "*.rss", "*.atom", "*.png".`
+- **UA-01-003:** `The system shall reject usernames that match reserved names including ".", "..", ".well-known", "admin", "api", "assets", "attachments", "avatar", "avatars", "captcha", "commits", "debug", "error", "explore", "favicon.ico", "ghost", "issues", "login", "manifest.json", "metrics", "milestones", "new", "notifications", "org", "pulls", "raw", "repo", "repo-avatars", "robots.txt", "search", "serviceworker.js", "ssh_info", "swagger.v1.json", "user", "v2", "gitea-actions", and reserved patterns "*.keys", "*.gpg", "*.rss", "*.atom", "*.png".`
 - **UA-01-004:** `The system shall require a valid email address for account registration.`
 - **UA-01-005:** `The system shall hash passwords using a configurable algorithm (default pbkdf2).`
 - **UA-01-006:** `The system shall enforce a configurable minimum password length (default 8 characters).`
@@ -49,7 +49,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 ### Ubiquitous Requirements (Profile Properties)
 
 - **UA-02-001:** `The system shall store the following profile properties per user: username, full name, email, location, website, and description.`
-- **UA-02-002:** `The system shall support three user visibility levels: public, limited (authenticated users only), and private (explicit connections only).`
+- **UA-02-002:** `The system shall support three user visibility levels: public, limited (visible only to authenticated/connected users), and private (visible only to self and admins).`
 - **UA-02-003:** `The system shall store the user's language and theme preferences.`
 - **UA-02-004:** `The system shall support four notification preference levels: enabled, on-mention only, disabled, and all including own.`
 
@@ -139,7 +139,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 
 ### Unwanted Behaviour Requirements (Blocking Restrictions)
 
-- **UA-05-301:** `If a user attempts to block an admin user, then the system shall deny the block operation.`
+- **UA-05-301:** `If a user attempts to block an admin user, then the block record may be created, but enforcement is skipped for admin users (admins are immune to the effects of blocking).`
 - **UA-05-302:** `If a user attempts to block an organization, then the system shall deny the block operation (organizations cannot be blocked).`
 
 ---
@@ -258,7 +258,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 ### Ubiquitous Requirements (2FA Properties)
 
 - **AUTH-04-001:** `The system shall implement TOTP (RFC 6238) for two-factor authentication.`
-- **AUTH-04-002:** `The system shall encrypt TOTP secrets using AES with PBKDF2 key derivation.`
+- **AUTH-04-002:** `The system shall encrypt TOTP secrets using AES with a key derived from the instance SecretKey via MD5.` NOTE: MD5-based key derivation is a known weakness (collision-prone, no salt/stretching); see `models/auth/twofactor.go:95-98` (`getEncryptionKey` = `md5.Sum(SecretKey)`).
 - **AUTH-04-003:** `The system shall generate emergency scratch codes when 2FA is enabled.`
 
 ### Event-Driven Requirements (2FA Workflow)
@@ -266,7 +266,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 - **AUTH-04-101:** `When a user enables 2FA, the system shall generate a TOTP secret and display a QR code for authenticator app setup.`
 - **AUTH-04-102:** `When a user with 2FA enabled logs in, the system shall require a valid TOTP code after password verification.`
 - **AUTH-04-103:** `When a user enters a valid scratch code, the system shall accept it as a valid second factor and consume that code.`
-- **AUTH-04-104:** `When an admin resets a user's 2FA, the system shall disable 2FA and regenerate scratch codes.`
+- **AUTH-04-104:** `When an admin resets a user's 2FA, the system shall disable 2FA (scratch codes consumed; new ones generated only on re-enrollment).`
 
 ### Unwanted Behaviour Requirements (2FA Errors)
 
@@ -389,7 +389,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 ### Ubiquitous Requirements (Heatmap Properties)
 
 - **UA-07-001:** `The system shall track contribution events per user across repositories, issues, pull requests, and comments.`
-- **UA-07-002:** `The system shall aggregate contribution counts per UTC day for heatmap visualization.`
+- **UA-07-002:** `The system shall aggregate contribution counts per 15-minute bucket (to permit client-side timezone rendering).`
 - **UA-07-003:** `The system shall expose heatmap data for the trailing 365-day window relative to the request time.`
 - **UA-07-004:** `The system shall render the heatmap on the user profile page when the profile is viewable by the requester.`
 
@@ -427,7 +427,6 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 ### Event-Driven Requirements (GPG Key Workflow)
 
 - **AUTH-07-101:** `When a user submits an ASCII-armored GPG public key block, the system shall parse the key, extract its metadata, and store it.`
-- **AUTH-07-102:** `When a user requests a key be imported by long ID from a configured public keyserver, the system shall fetch and store the key.`
 - **AUTH-07-103:** `When a commit or tag with a PGP signature is rendered, the system shall attempt to verify the signature against the purported author's registered GPG keys.`
 - **AUTH-07-104:** `When a user deletes a registered GPG key, the system shall remove the key immediately and cease to verify future commits with that key.`
 - **AUTH-07-105:** `When a commit is pushed whose signature fails verification, the system shall render an "Unverified" indicator on the commit view.`
@@ -453,7 +452,7 @@ Baseline specification of Gitea's identity, authentication, authorization, and f
 ### Ubiquitous Requirements (OpenID Properties)
 
 - **AUTH-08-001:** `The system shall implement OpenID 2.0 consumer functionality for delegated authentication.`
-- **AUTH-08-002:** `The system shall treat OpenID as one of the AUTH-06 authentication source types.`
+- **AUTH-08-002:** `The system shall implement OpenID as a dedicated consumer flow via routers/web/auth/openid.go, storing identities in the user_open_id table, separate from the login_source auth.Type enum (NoType, Plain, LDAP, SMTP, PAM, DLDAP, OAuth2, SSPI — no OpenID entry).`
 - **AUTH-08-003:** `The system shall discover the OpenID provider endpoint from the user-supplied OpenID URL via Yadis / HTML discovery.`
 - **AUTH-08-004:** `The system shall request the SReg and AX attributes required for account creation (nickname, email, full name).`
 
@@ -501,28 +500,39 @@ The following INI sections under `[identity-access]`-relevant namespaces configu
 - **PASSWORD_CHECK_PWNED**: Reject passwords appearing in the HaveIBeenPwned breach database when enabled.
 - **INTERNAL_TOKEN**: Secret token for internal API calls between Gitea processes; auto-generated if empty.
 - **INTERNAL_TOKEN_URI**: File or command URI from which to load the internal token.
+- **SUCCESSFUL_TOKENS_CACHE_SIZE**: Number of successfully validated tokens to cache for fast lookup (default 20).
+- **DISABLE_QUERY_AUTH_TOKEN**: Disable legacy query-string API auth tokens (default false; will default true in future releases).
+- **IMPORT_LOCAL_PATHS**: Allow importing of local paths as repositories when enabled (default false).
+- **DISABLE_GIT_HOOKS**: Disable creation of user-owned git hooks to prevent arbitrary code execution (default true).
+- **DISABLE_WEBHOOKS**: Disable all webhooks across the instance when enabled (default false).
+- **CSRFCookieName**: Name of the CSRF protection cookie (default `_csrf`).
+- **CSRF_COOKIE_HTTP_ONLY**: Mark the CSRF cookie as HTTP-only (default true).
 
 ### [session] Section
 
-- **PROVIDER**: Session storage backend (`memory`, `file`, `redis`, `mysql`, `postgres`, `couchbase`, `redis-cluster`).
+- **PROVIDER**: Session storage backend (`memory`, `file`, `redis`, `mysql`, `postgres`, `couchbase`, `memcache`, `db`).
 - **PROVIDER_CONFIG**: Connection string consumed by the chosen provider.
 - **COOKIE_NAME**: Name of the session cookie (default `i_like_gitea`).
-- **COOKIE_SECURE**: Force `Secure` attribute on session cookies (`true` = always, `false` = never, `lax` = auto).
-- **GC_INTERVAL_TIME**: Garbage collection interval for expired sessions (seconds, default 60).
-- **MAX_LIFE_TIME**: Maximum session lifetime in seconds.
-- **CSRF_COOKIE_NAME**: Name of the CSRF protection cookie.
-- **SAME_SITE**: SameSite attribute on session cookies (`lax`, `strict`, `none`).
+- **COOKIE_SECURE**: Boolean — force `Secure` attribute on session cookies (default auto-derived from site URL scheme).
+- **DOMAIN**: Cookie domain name (default empty).
+- **COOKIE_PATH**: Cookie path (default `AppSubURL`, or `/`).
+- **GC_INTERVAL_TIME**: Garbage collection interval for expired sessions (seconds, default 86400).
+- **SESSION_LIFE_TIME**: Maximum session lifetime in seconds (default 86400).
+- **SAME_SITE**: SameSite attribute on session cookies (`lax`, `strict`, `none`; default `lax`).
+
+> NOTE: The CSRF cookie name (`CSRFCookieName`, default `_csrf`) is configured under the `[security]` section, not `[session]`.
 
 ### [oauth2] Section
 
-- **ENABLE**: Enable the OAuth2 provider (Authorization Server) role.
+- **ENABLED**: Enable the OAuth2 provider (Authorization Server) role (default true). `ENABLE` is a deprecated alias renamed to `ENABLED`.
 - **JWT_SECRET**: Secret used to sign OAuth2 JWTs; auto-generated if empty; rotate to invalidate outstanding tokens.
-- **JWT_SIGNING_ALGORITHM**: Algorithm for JWT signing (`RS256`, `HS256`, etc.).
-- **DEFAULT_APPLICATION_VISIBILITY**: Default visibility for newly registered OAuth2 applications.
+- **JWT_SIGNING_ALGORITHM**: Algorithm for JWT signing (default `RS256`).
+- **JWT_SIGNING_PRIVATE_KEY_FILE**: Path to the JWT signing private key file (default `jwt/private.pem` under AppDataPath).
 - **ACCESS_TOKEN_EXPIRATION_TIME**: Access token TTL in seconds (default 3600).
 - **REFRESH_TOKEN_EXPIRATION_TIME**: Refresh token TTL in hours (default 730).
-- **INVALIDATE_REFRESH_TOKENS**: Rotate refresh tokens on each use when enabled.
-- **CLIENT_SECRET_LENGTH**: Length of generated client secrets.
+- **INVALIDATE_REFRESH_TOKENS**: Rotate refresh tokens on each use when enabled (default false).
+- **MAX_TOKEN_LENGTH**: Maximum length of generated access tokens (default 32767).
+- **DEFAULT_APPLICATIONS**: Comma-separated list of built-in OAuth2 applications to pre-register at startup (default `git-credential-oauth`, `git-credential-manager`, `tea`; empty string disables all).
 
 ### [openid] Section
 
@@ -530,6 +540,25 @@ The following INI sections under `[identity-access]`-relevant namespaces configu
 - **ENABLE_OPENID_SIGNUP**: Allow new account creation via OpenID (default false unless `DISABLE_REGISTRATION` is true).
 - **WHITELISTED_URIS**: Glob patterns restricting accepted OpenID provider URIs.
 - **BLACKLISTED_URIS**: Glob patterns blocking specific OpenID provider URIs.
+
+### [oauth2_client] Section
+
+- **ENABLE_AUTO_REGISTRATION**: Automatically create a local account on first OAuth2 login when enabled (default false).
+- **USERNAME**: Source field for generating the local username from OAuth2 data (`userid`, `nickname`, `email`, `preferred_username`; default `nickname`).
+- **ACCOUNT_LINKING**: Behavior when an OAuth2 identity matches an existing local account (`disabled`, `login`, `auto`; default `login`).
+- **UPDATE_AVATAR**: Update the local avatar from the OAuth2 provider on each login when enabled (default false).
+- **OPENID_CONNECT_SCOPES**: Space-separated OpenID Connect scopes requested from the provider.
+- **REGISTER_EMAIL_CONFIRM**: Require email confirmation for OAuth2 auto-registered accounts (inherits `[service].REGISTER_EMAIL_CONFIRM`).
+
+### [federation] Section
+
+- **ENABLED**: Enable ActivityPub federation and HTTP Signature support (default false).
+- **SHARE_USER_STATISTICS**: Permit sharing instance-level user statistics when federation is enabled (default true).
+- **MAX_SIZE**: Maximum size of incoming federation payloads in MiB (default 4).
+- **ALGORITHMS**: Supported HTTP Signature algorithms (default `rsa-sha256`, `rsa-sha512`, `ed25519`).
+- **DIGEST_ALGORITHM**: Digest algorithm for signed federation requests (default `SHA-256`).
+- **GET_HEADERS**: Headers included in signed GET requests (default `(request-target)`, `Date`).
+- **POST_HEADERS**: Headers included in signed POST requests (default `(request-target)`, `Date`, `Digest`).
 
 ---
 
@@ -548,6 +577,7 @@ The following INI sections under `[identity-access]`-relevant namespaces configu
 - **BR-01-011:** User blocking is directional (blocker → blockee), not reciprocal
 - **BR-01-012:** Ghost users are system accounts used for attribution after account deletion
 - **BR-01-013:** Federation respects user visibility settings (private users are not discoverable)
+- **BR-01-014:** Registration supports a third confirmation mode beside email-confirm: `REGISTER_MANUAL_CONFIRM` requires an admin to manually activate newly registered accounts; it is ignored when `REGISTER_EMAIL_CONFIRM` is enabled (evidence: `modules/setting/service.go:147`)
 
 ## Edge Cases & Error Handling
 
