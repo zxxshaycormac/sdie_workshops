@@ -12,7 +12,8 @@ Baseline specification of Gitea's package registry, container registry, release 
 
 - **PKG-01-001:** `The system shall provide a multi-format package registry supporting 21 package types: Alpine, Cargo, Chef, Composer, Conan, Conda, Container, CRAN, Debian, Generic, Go, Helm, Maven, npm, NuGet, Pub, PyPI, RPM, RubyGems, Swift, and Vagrant.`
 - **PKG-01-002:** `The system shall store package content using content-addressable storage with SHA256 deduplication.`
-- **PKG-01-003:** `The system shall organize stored content under the path structure packages/aa/bb/SHA256.`
+- **PKG-01-008:** `The system shall compute MD5, SHA1, SHA256, and SHA512 checksums simultaneously for each package blob via a multi-hasher, persisting all four hashes on the blob record for use by type-specific registry metadata.`
+- **PKG-01-003:** `The system shall organize stored content under the relative path aa/bb/<full-sha256>, where aa and bb are the first and second two-character segments of the SHA256 key and the full hash is repeated as the filename (e.g. aabb0000... → aa/bb/aabb0000...).`
 - **PKG-01-004:** `The system shall scope all packages to an owner (user or organization).`
 - **PKG-01-005:** `The system shall require authentication for all package operations (publish, install, delete).`
 - **PKG-01-006:** `The system shall support JWT token-based, basic auth, and OAuth2 authentication for package API endpoints.`
@@ -30,7 +31,8 @@ Baseline specification of Gitea's package registry, container registry, release 
 
 - **PKG-01-201:** `Where the [packages] ENABLED setting is false, the system shall disable the package registry and return 404 for all package endpoints.`
 - **PKG-01-202:** `Where MinIO/S3 storage is configured with SERVE_DIRECT, the system shall generate direct download URLs that bypass the Gitea server.`
-- **PKG-01-203:** `Where per-user or per-package-type quotas are configured, the system shall enforce size limits on package storage.`
+- **PKG-01-203:** `Where per-owner quotas are configured via LIMIT_TOTAL_OWNER_COUNT and LIMIT_TOTAL_OWNER_SIZE, and per-package-type quotas are configured via the 21 LIMIT_SIZE_* keys (LIMIT_SIZE_ALPINE, LIMIT_SIZE_CARGO, LIMIT_SIZE_CHEF, LIMIT_SIZE_COMPOSER, LIMIT_SIZE_CONAN, LIMIT_SIZE_CONDA, LIMIT_SIZE_CONTAINER, LIMIT_SIZE_CRAN, LIMIT_SIZE_DEBIAN, LIMIT_SIZE_GENERIC, LIMIT_SIZE_GO, LIMIT_SIZE_HELM, LIMIT_SIZE_MAVEN, LIMIT_SIZE_NPM, LIMIT_SIZE_NUGET, LIMIT_SIZE_PUB, LIMIT_SIZE_PYPI, LIMIT_SIZE_RPM, LIMIT_SIZE_RUBYGEMS, LIMIT_SIZE_SWIFT, LIMIT_SIZE_VAGRANT), the system shall enforce count and size limits on package storage.`
+- **PKG-01-204:** `Where a personal access token is issued with the public-only variant of the read:package scope, the system shall restrict token access to public packages only and reject access to private owner packages with 403 Forbidden.`
 
 ### Complex Requirements (Cleanup Rules)
 
@@ -40,7 +42,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 ### Unwanted Behaviour Requirements (Registry Errors)
 
 - **PKG-01-301:** `If a client publishes a package version that already exists for the same owner and package name, then the system shall reject the publication with a conflict error.`
-- **PKG-01-302:** `If a client attempts to access a package without the required read:package scope, then the system shall reject the request with 403 Forbidden.`
+- **PKG-01-302:** `If a client attempts to access a package without the required read:package scope, then the system shall reject the request with 401 Unauthorized (including a WWW-Authenticate: Basic header). A 403 Forbidden is returned only when a token with a public-only scope variant attempts to access a private package.`
 - **PKG-01-303:** `If the package storage backend is unreachable, then the system shall return a 503 Service Unavailable response.`
 
 ---
@@ -55,6 +57,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 - **PKG-02-002:** `The system shall scope container images to an owner (user or organization) via the path /v2/{owner}/{image}/.`
 - **PKG-02-003:** `The system shall support multi-architecture images via manifest lists.`
 - **PKG-02-004:** `The system shall track tags as references to specific manifests.`
+- **PKG-02-005:** `The system shall expose a /v2/_catalog endpoint that returns the list of all container repositories (images) across owners, with pagination via the n and last query parameters.`
 
 ### Event-Driven Requirements (Container Workflow)
 
@@ -184,6 +187,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 
 - **PKG-05-201:** `Where [lfs] MAX_FILE_SIZE is configured, the system shall reject LFS uploads exceeding the configured limit.`
 - **PKG-05-202:** `Where MinIO/S3 storage is configured for LFS, the system shall store LFS objects in the configured bucket instead of local filesystem.`
+- **PKG-05-203:** `Where [server] LFS_HTTP_AUTH_EXPIRY is configured (default 24h), the system shall issue LFS batch API download/upload URLs with authentication tokens that expire after the configured duration.`
 
 ### Unwanted Behaviour Requirements (LFS Errors)
 
@@ -214,7 +218,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 
 ### Optional Feature Requirements (Attachment Configuration)
 
-- **PKG-06-201:** `Where [attachment] MAX_SIZE is configured, the system shall reject file uploads exceeding the specified limit (default 4MB).`
+- **PKG-06-201:** `Where [attachment] MAX_SIZE is configured, the system shall reject file uploads exceeding the specified limit (default 2MB / 2048 KB).`
 - **PKG-06-202:** `Where [attachment] MAX_FILES is configured, the system shall limit the number of files per upload batch (default 5).`
 - **PKG-06-203:** `Where [attachment] ENABLED is false, the system shall disable all attachment upload functionality.`
 
@@ -233,7 +237,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 ### Ubiquitous Requirements (Storage Architecture)
 
 - **PKG-07-001:** `The system shall support two storage backend types: local filesystem and MinIO/S3 (AWS-compatible).`
-- **PKG-07-002:** `The system shall allow independent storage configuration for each of the following types: attachments, LFS, packages, avatars, repo-avatars, repo-archive, actions_log, and actions_artifact.`
+- **PKG-07-002:** `The system shall allow independent storage configuration for each of the following types: attachments, LFS, packages, avatars, repo-avatars, repo-archive, actions_log, and actions_artifacts.`
 - **PKG-07-003:** `The system shall apply a default storage configuration as fallback for any storage type without explicit configuration.`
 - **PKG-07-004:** `The system shall configure each storage type via [storage.{type}] INI sections with backend-specific parameters.`
 
@@ -268,7 +272,7 @@ Baseline specification of Gitea's package registry, container registry, release 
 - **BR-06-007:** LFS objects are shared across repositories via content addressing; a single object is stored once
 - **BR-06-008:** LFS locks are per-repository and per-path; only one lock per path per repository is allowed
 - **BR-06-009:** Attachment UUIDs are globally unique and serve as the primary download identifier
-- **BR-06-010:** Default attachment size limit is 4MB; default file count limit per upload is 5
+- **BR-06-010:** Default attachment size limit is 2MB (2048 KB); default file count limit per upload is 5
 - **BR-06-011:** Each storage type (attachments, LFS, packages, etc.) can use a different backend independently
 - **BR-06-012:** SERVE_DIRECT applies only to MinIO backends, not to local storage
 - **BR-06-013:** Package authentication requires either a personal access token with read:package/write:package scopes or basic auth credentials
