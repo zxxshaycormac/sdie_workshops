@@ -1,6 +1,6 @@
 # 03 — Organization
 
-Baseline specification of Gitea's organization, team, membership, label, project, blocking, badge, and settings subsystems. All requirements describe the current (v1.22.x) system behavior.
+Baseline specification of Gitea's organization, team, membership, label, project, blocking, and settings subsystems. (Badges are documented as a user-account feature in §7 — see Identity & Access for full requirements.) All requirements describe the current (v1.22.x) system behavior.
 
 ---
 
@@ -50,9 +50,11 @@ Baseline specification of Gitea's organization, team, membership, label, project
 
 - **ORG-02-001:** `The system shall define five team permission levels: Owner, Admin, Write, Read, and None.`
 - **ORG-02-002:** `The system shall enforce team name uniqueness within each organization.`
-- **ORG-02-003:** `The system shall support the following unit-level permission targets: Code, Issues, Pull Requests, Wiki, External Wiki, External Issues, Projects, Packages, and Actions.`
+- **ORG-02-003:** `The system shall support the following ten unit-level permission targets: Code, Issues, Pull Requests, Releases, Wiki, External Wiki, External Tracker, Projects, Packages, and Actions.`
 - **ORG-02-004:** `The system shall assign all unit permissions automatically to Owner-level teams.`
 - **ORG-02-005:** `The system shall track an IncludesAllRepositories flag per team that grants access to all current and future organization repositories.`
+- **ORG-02-006:** `The system shall track a CanCreateOrgRepo flag as a first-class per-team property that authorizes members to create repositories under the organization.`
+- **ORG-02-007:** `The system shall persist per-unit team access modes on each TeamUnit record (Read, Write, or Admin) rather than a binary on/off, allowing teams to hold different access levels across units.`
 
 ### Event-Driven Requirements (Team Lifecycle)
 
@@ -99,13 +101,11 @@ Baseline specification of Gitea's organization, team, membership, label, project
 
 ### State-Driven Requirements (Invitation Lifecycle)
 
-- **ORG-03-701:** `While a team invitation token has not expired, the system shall allow the recipient to accept or decline the invitation.`
 - **ORG-03-702:** `While a user is a member of an organization, the system shall include that organization in the user's organization listing.`
 
 ### Unwanted Behaviour Requirements (Membership Errors)
 
 - **ORG-03-301:** `If a user attempts to add an already-existing team member to the same team, then the system shall reject the addition.`
-- **ORG-03-302:** `If a team invitation token has expired, then the system shall reject the invitation acceptance and offer to resend.`
 - **ORG-03-303:** `If a non-authorized user attempts to modify team membership, then the system shall deny the operation.`
 - **ORG-03-304:** `If a user attempts to invite a blocked user to a team, then the system shall deny the invitation.`
 - **ORG-03-305:** `If the last owner of an organization attempts to leave, then the system shall deny the departure.`
@@ -155,7 +155,7 @@ Baseline specification of Gitea's organization, team, membership, label, project
 
 ### Event-Driven Requirements (Project Lifecycle)
 
-- **ORG-05-101:** `When an authorized user creates an org-level project, the system shall initialize it with default columns.`
+- **ORG-05-101:** `When an authorized user creates an org-level project with a non-None board type (BasicKanban or BugTriage), the system shall initialize it with the corresponding default columns; a BoardTypeNone project (the default) is created with zero columns.`
 - **ORG-05-102:** `When an authorized user adds an issue or pull request to an org-level project, the system shall create a card in the specified column.`
 - **ORG-05-103:** `When an authorized user moves a card between columns, the system shall update the card's column assignment.`
 - **ORG-05-104:** `When an authorized user closes a project, the system shall mark the project as closed and preserve all cards and columns.`
@@ -194,34 +194,20 @@ Baseline specification of Gitea's organization, team, membership, label, project
 
 ### Unwanted Behaviour Requirements (Blocking Restrictions)
 
-- **ORG-06-301:** `If an organization owner attempts to block an admin user, then the system shall deny the block operation.`
+- **ORG-06-301:** `If an organization owner attempts to block an admin user, then the system may create the block record, but enforcement is skipped for admin users (IsUserBlockedBy returns false for admins).`
 - **ORG-06-302:** `If an organization owner attempts to block an organization (rather than an individual user), then the system shall deny the block operation.`
 - **ORG-06-303:** `If a non-owner user attempts to block or unblock a user at the organization level, then the system shall deny the operation.`
 
 ---
 
-## 7. Badges
+## 7. Badges (User-Account Feature)
 
-**User Story:** As an admin, I want to define and assign badges to organizations so that they serve as visual achievement or status indicators.
+**Note:** Badges are a **user-account** feature, not an org-domain capability. The `UserBadge` model (`models/user/badge.go`) is keyed by `UserID` and is administered via `/admin/users/{username}/badges` (`routers/api/v1/admin/user_badge.go`). No `OrgBadge` model exists and there is no org-profile badge rendering. Because organizations are stored as `User` records, an admin can technically assign a badge to an org's User ID, but this is incidental rather than an org-domain feature. Detailed requirements for badges live in the Identity & Access spec.
 
 ### Ubiquitous Requirements (Badge Properties)
 
-- **ORG-07-001:** `The system shall store badge definitions with a unique slug identifier, description, and image URL.`
-- **ORG-07-002:** `The system shall support multiple badges per organization.`
-- **ORG-07-003:** `The system shall display assigned badges on organization profile pages.`
-
-### Event-Driven Requirements (Badge Lifecycle)
-
-- **ORG-07-101:** `When an admin creates a badge definition, the system shall register the badge with the specified slug, description, and image URL.`
-- **ORG-07-102:** `When an admin assigns a badge to an organization, the system shall associate the badge with the organization and display it on the organization profile.`
-- **ORG-07-103:** `When an admin removes a badge from an organization, the system shall disassociate the badge and remove it from the organization profile.`
-- **ORG-07-104:** `When an admin updates a badge definition, the system shall propagate the change to all organizations that have been assigned that badge.`
-
-### Unwanted Behaviour Requirements (Badge Errors)
-
-- **ORG-07-301:** `If a badge creation uses a slug that already exists, then the system shall reject the creation.`
-- **ORG-07-302:** `If a non-admin user attempts to create, modify, or assign badges, then the system shall deny the operation.`
-- **ORG-07-303:** `If an attempt is made to assign a non-existent badge to an organization, then the system shall reject the assignment.`
+- **ORG-07-001:** `The system shall store badge definitions (Badge) with a unique slug identifier, description, and image URL.`
+- **ORG-07-002:** `The system shall associate badges with user accounts via the UserBadge join table keyed on UserID (no org-specific badge model or org-profile rendering exists).`
 
 ---
 
@@ -233,8 +219,6 @@ Baseline specification of Gitea's organization, team, membership, label, project
 
 - **ORG-08-001:** `The system shall restrict access to organization settings to users with owner-level permission in the organization.`
 - **ORG-08-002:** `The system shall store the following profile settings per organization: name, full name, email, description, website, and location.`
-- **ORG-08-003:** `The system shall support configurable default repository permission for organization members (Read, Write, or Admin).`
-- **ORG-08-004:** `The system shall support configurable member fork permissions for organization repositories.`
 
 ### Event-Driven Requirements (Settings Updates)
 
@@ -245,7 +229,9 @@ Baseline specification of Gitea's organization, team, membership, label, project
 - **ORG-08-105:** `When an organization owner confirms deletion via the settings page, the system shall delete the organization and all associated data.`
 - **ORG-08-106:** `When an organization owner configures webhooks, the system shall register the webhooks to fire on the specified events across organization repositories.`
 - **ORG-08-107:** `When an organization owner registers an OAuth2 application, the system shall create the application scoped to the organization.`
-- **ORG-08-108:** `When an organization owner configures a CI/CD runner, the system shall register the runner for use by organization repositories.`
+- **ORG-08-108:** `When an organization owner configures a CI/CD runner, the system shall register the runner (ActionRunner/ActionRunnerToken) scoped to the organization's OwnerID for use by organization repositories.`
+- **ORG-08-109:** `When an organization owner creates an Actions secret, the system shall store the secret scoped to the organization (Secret.OwnerID = org.ID).`
+- **ORG-08-110:** `When an organization owner configures a package cleanup rule, the system shall persist the rule at the organization scope; the owner may also initialize or rebuild the Cargo package index for the organization.`
 
 ### Optional Feature Requirements (Integration Settings)
 
@@ -272,10 +258,9 @@ Baseline specification of Gitea's organization, team, membership, label, project
 - **BR-03-007:** MaxRepoCreation of -1 means unlimited repository creation; 0 means no creation; positive values set a numeric limit
 - **BR-03-008:** Organization-level labels are distinct from repository-level labels but appear alongside them in issue/PR label selectors
 - **BR-03-009:** User blocking at the organization level is directional and does not block the user instance-wide
-- **BR-03-010:** Badge definitions are admin-managed; organizations cannot self-assign badges
+- **BR-03-010:** Badge definitions are admin-managed and assigned to user accounts (UserBadge.UserID); they are not an org-domain feature
 - **BR-03-011:** Org-level projects can reference issues and pull requests from any repository owned by the organization
 - **BR-03-012:** Exclusive (scoped) labels allow only one label per scope on a given issue or pull request
-- **BR-03-013:** Team invitation tokens have a configurable expiration period
 - **BR-03-014:** RepoAdminChangeTeamAccess determines whether repository administrators can modify team access for their repositories
 
 ## Edge Cases & Error Handling
@@ -288,14 +273,13 @@ Baseline specification of Gitea's organization, team, membership, label, project
 | Rename organization to existing name | Reject rename with conflict error |
 | Add user already on the team | Reject addition with duplicate membership error |
 | Invite blocked user to team | Deny invitation |
-| Expired team invitation token | Reject acceptance; offer to resend invitation |
+| Team invitation token does not expire | Tokens are accepted at any time after issuance until manually revoked |
 | Delete org-level label in active use | Remove label from all referencing issues and pull requests |
 | Create project without Projects unit enabled | Deny project creation or prevent adding cards from repos with Projects disabled |
-| Block an admin user at org level | Deny block operation |
+| Block an admin user at org level | Block record may be created; enforcement skipped (admin not actually blocked) |
 | Block an organization account | Deny block operation (only individual users can be blocked) |
 | Access org settings as non-owner | Return 404 or redirect away |
 | Org deletion with wrong confirmation text | Deny deletion |
-| Create badge with duplicate slug | Reject badge creation |
 | Team with IncludesAllRepositories and new repo created | Automatically grant team access to the new repository |
 | User leaves organization while last owner | Deny departure |
 | Visibility change to Private | Hide org from non-member listings and search |
@@ -309,7 +293,16 @@ Baseline specification of Gitea's organization, team, membership, label, project
 - Project board rendering with 100+ cards completes within 2 seconds
 - Team invitation emails are sent within 30 seconds of creation
 - Blocking a user takes effect immediately across all organization resources
-- Badge assignment and display updates within 1 second
 - Organization settings changes persist immediately and reflect on next page load
 - Permission computation for any organization resource completes in under 50ms
 - Org-level project boards support issues from all organization repositories simultaneously
+
+## Configuration Reference
+
+Defaults shown reflect Gitea v1.22.x.
+
+| Key | Section | Default | Purpose |
+|-----|---------|---------|---------|
+| `DEFAULT_ORG_MEMBER_VISIBLE` | `[service]` | `false` | Whether organization members are listed as visible by default on the org's member page (members may still override their own visibility). Source: `modules/setting/service.go:81,224`. |
+| `DEFAULT_ORG_VISIBILITY` | `[service]` | `public` | Default visibility for newly created organizations. Source: `modules/setting/service.go:222`. |
+| `DISABLE_REGULAR_ORG_CREATION` | `[admin]` | `false` | When true, restricts organization creation to administrators only. Source: `modules/setting/admin.go:20`. |
