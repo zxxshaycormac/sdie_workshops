@@ -10,8 +10,8 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 ### Ubiquitous Requirements (Search Defaults)
 
-- **SRCH-01-001:** `The system shall support two search modes: fuzzy (Damerau-Levenshtein distance, default) and exact (literal keyword match).`
-- **SRCH-01-002:** `The system shall apply repository search filters including topic, primary language, star count, fork count, repository size, and license.`
+- **SRCH-01-001:** `The system shall match repository keywords using database LIKE (substring) queries; there is no fuzzy/exact mode toggle for repository search.`
+- **SRCH-01-002:** `The system shall apply repository search filters including topic and primary language. Star count, fork count, and repository size are available as sort orders only (not filters); no license filter exists.`
 - **SRCH-01-003:** `The system shall apply ownership filters including user/org UID, archived status, private status, and template status.`
 - **SRCH-01-004:** `The system shall apply repository mode filters: source, fork, mirror, and collaborative.`
 - **SRCH-01-005:** `The system shall support the following sort options: alphabetical, reverse alphabetical, created date, oldest, updated, recent update, least update, size, reverse size, ID, reverse ID, stars, and forks.`
@@ -28,7 +28,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 ### Optional Feature Requirements (Repo Indexer)
 
 - **SRCH-01-201:** `Where REPO_INDEXER_ENABLED is true, the system shall index repository names and descriptions for full-text search.`
-- **SRCH-01-202:** `Where a default explore sort is configured via EXPLORE_DEFAULT_SORT, the system shall use that sort order as the initial ordering on the explore repos page.`
+- **SRCH-01-202:** `Where a default explore sort is configured via EXPLORE_PAGING_DEFAULT_SORT, the system shall use that sort order as the initial ordering on the explore repos page.`
 
 ### Unwanted Behaviour Requirements (Search Errors)
 
@@ -44,11 +44,12 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 ### Ubiquitous Requirements (Code Search Properties)
 
 - **SRCH-02-001:** `The system shall support full-text search through source code in repositories accessible to the authenticated user.`
-- **SRCH-02-002:** `The system shall support three indexer backends for code search: Bleve (embedded, default), Elasticsearch (external), and Meilisearch (external).`
+- **SRCH-02-002:** `The system shall support two indexer backends for code search: Bleve (embedded, default) and Elasticsearch (external).`
 - **SRCH-02-003:** `The system shall provide a language filter allowing users to restrict code search results to specific programming languages.`
 - **SRCH-02-004:** `The system shall display syntax highlighting in code search results based on file language.`
 - **SRCH-02-005:** `The system shall display context lines surrounding each search match.`
 - **SRCH-02-006:** `The system shall expose code search via GET /explore/code (global) and GET /{owner}/{repo}/search (repo-scoped).`
+- **SRCH-02-007:** `The system shall support two search modes for code search: fuzzy (Levenshtein distance, default) and exact (literal match), selected via the fuzzy query parameter.`
 
 ### Event-Driven Requirements (Indexing Workflow)
 
@@ -62,7 +63,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 - **SRCH-02-202:** `Where REPO_INDEXER_EXCLUDE patterns are configured, the system shall skip files matching those glob patterns during indexing.`
 - **SRCH-02-203:** `Where REPO_INDEXER_EXCLUDE_VENDORED is enabled, the system shall skip files in vendor directories during indexing.`
 - **SRCH-02-204:** `Where REPO_INDEXER_TYPE is set to elasticsearch, the system shall connect to the external Elasticsearch cluster specified by REPO_INDEXER_CONN_STR.`
-- **SRCH-02-205:** `Where REPO_INDEXER_TYPE is set to meilisearch, the system shall connect to the external Meilisearch instance specified by REPO_INDEXER_CONN_STR.`
+- **SRCH-02-206:** `The system shall index only repositories whose type matches the configured REPO_INDEXER_REPO_TYPES list (default: sources, forks, mirrors, templates).`
 
 ### Unwanted Behaviour Requirements (Code Search Errors)
 
@@ -93,11 +94,13 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 - **SRCH-03-103:** `When a user applies the "review requested" filter, the system shall show issues and PRs where a code review has been requested from the current user.`
 - **SRCH-03-104:** `When a user applies the "reviewed by" filter, the system shall show issues and PRs that the current user has reviewed.`
 - **SRCH-03-105:** `When a user applies an owner/team filter, the system shall restrict results to repositories owned by the specified owner or accessible to the specified team.`
+- **SRCH-03-106:** `When a user submits an issue query with an empty keyword, the system shall bypass the configured indexer and use the database backend directly to ensure consistent listing.`
 
 ### Optional Feature Requirements (Issue Indexer)
 
 - **SRCH-03-201:** `Where ISSUE_INDEXER_TYPE is set to elasticsearch, the system shall use Elasticsearch as the issue search backend.`
 - **SRCH-03-202:** `Where ISSUE_INDEXER_TYPE is set to meilisearch, the system shall use Meilisearch as the issue search backend.`
+- **SRCH-03-203:** `Where ISSUE_INDEXER_TYPE is set to db, the system shall use database-based issue search without an external indexer.`
 
 ### Unwanted Behaviour Requirements (Issue Search Errors)
 
@@ -128,7 +131,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 ### Optional Feature Requirements (User Search Configuration)
 
-- **SRCH-04-201:** `Where EXPLORE_DISABLE_USERS_PAGE is enabled, the system shall disable the user explore page and return 404 for GET /explore/users.`
+- **SRCH-04-201:** `Where [service].DISABLE_USERS_PAGE is enabled, the system shall disable the user explore page and redirect GET /explore/users to the repositories explore page.`
 
 ### Unwanted Behaviour Requirements (User Search Errors)
 
@@ -162,7 +165,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 ### Unwanted Behaviour Requirements (Explore Errors)
 
-- **SRCH-05-301:** `If EXPLORE_DISABLE_USERS_PAGE is enabled and a visitor navigates to GET /explore/users, then the system shall return 404.`
+- **SRCH-05-301:** `If [service].DISABLE_USERS_PAGE is enabled and a visitor navigates to GET /explore/users, then the system shall redirect to GET /explore/repos.`
 - **SRCH-05-302:** `If an unauthenticated visitor accesses explore pages, then the system shall show only public resources.`
 
 ---
@@ -173,8 +176,8 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 ### Ubiquitous Requirements (Indexer Properties)
 
-- **SRCH-06-001:** `The system shall provide separate indexer components for code (REPO_INDEXER), issues (ISSUE_INDEXER), and repository statistics (STATS_INDEXER).`
-- **SRCH-06-002:** `The system shall support Bleve, Elasticsearch, and Meilisearch as indexer backends for both code and issue indexers.`
+- **SRCH-06-001:** `The system shall provide separate indexer components for code (REPO_INDEXER), issues (ISSUE_INDEXER), and repository statistics (STATS_INDEXER); the STATS_INDEXER is DB-only with no backend choice and no configuration section.`
+- **SRCH-06-002:** `The system shall support Bleve and Elasticsearch as backends for the code indexer, and Bleve, Elasticsearch, Meilisearch, and db as backends for the issue indexer.`
 - **SRCH-06-003:** `The system shall use a worker pool with async queue processing for indexer updates.`
 - **SRCH-06-004:** `The system shall deduplicate indexer queue entries to avoid redundant indexing operations.`
 
@@ -184,13 +187,13 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 - **SRCH-06-102:** `When a repository update event occurs, the system shall enqueue the relevant files or issues for re-indexing.`
 - **SRCH-06-103:** `When an indexer queue entry fails to process, the system shall log the error and retry the entry.`
 - **SRCH-06-104:** `When the system shuts down, the system shall drain the indexer queues gracefully before terminating.`
-- **SRCH-06-105:** `When an admin triggers a full index rebuild, the system shall re-index all content for the specified indexer from scratch.`
-- **SRCH-06-106:** `When an admin triggers an incremental rebuild, the system shall re-index only content that has changed since the last successful index.`
+- **SRCH-06-105:** `When an indexer is initialized for the first time (no existing index), the system shall automatically populate the index from scratch via populateRepoIndexer (code/stats) or PopulateIssueIndexer (issues); no admin reindex UI exists.`
+- **SRCH-06-106:** `When repository or issue update events occur after initial population, the system shall incrementally re-index only the affected content via the indexer queue.`
 
 ### State-Driven Requirements (Indexer Health)
 
 - **SRCH-06-701:** `While an external indexer backend is unreachable, the system shall queue indexing operations for retry and return degraded search results.`
-- **SRCH-06-702:** `While a full rebuild is in progress, the system shall track and report the rebuild progress.`
+- **SRCH-06-702:** `While initial index population is in progress, the system shall track and report the population progress.`
 
 ### Optional Feature Requirements (Indexer Configuration)
 
@@ -200,7 +203,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 ### Unwanted Behaviour Requirements (Indexer Errors)
 
 - **SRCH-06-301:** `If the indexer queue exceeds its capacity, then the system shall log a warning and continue accepting operations with delayed indexing.`
-- **SRCH-06-302:** `If a full rebuild is interrupted, then the system shall allow the rebuild to be restarted from the beginning.`
+- **SRCH-06-302:** `If initial index population is interrupted, then the system shall re-run it automatically on the next indexer initialization.`
 
 ---
 
@@ -213,13 +216,12 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 - **SRCH-07-001:** `The system shall generate XML sitemaps conforming to the sitemaps.org protocol.`
 - **SRCH-07-002:** `The system shall paginate sitemaps using the configured SITEMAP_PAGING_NUM page size.`
 - **SRCH-07-003:** `The system shall include last modified timestamps in sitemap entries.`
-- **SRCH-07-004:** `The system shall expose sitemaps for repositories, users, and organizations.`
+- **SRCH-07-004:** `The system shall expose sitemaps for repositories and users.`
 
 ### Event-Driven Requirements (Sitemap Generation)
 
 - **SRCH-07-101:** `When a request is made to GET /explore/repos/sitemap-{idx}.xml, the system shall generate a sitemap page containing up to SITEMAP_PAGING_NUM public repositories.`
 - **SRCH-07-102:** `When a request is made to GET /explore/users/sitemap-{idx}.xml, the system shall generate a sitemap page containing up to SITEMAP_PAGING_NUM public users.`
-- **SRCH-07-103:** `When a request is made to GET /explore/organizations/sitemap-{idx}.xml, the system shall generate a sitemap page containing up to SITEMAP_PAGING_NUM public organizations.`
 
 ### Unwanted Behaviour Requirements (Sitemap Constraints)
 
@@ -236,13 +238,13 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 ### Ubiquitous Requirements (Autocomplete Properties)
 
 - **SRCH-08-001:** `The system shall expose a /user/search_candidates endpoint optimized for low-latency typeahead responses.`
-- **SRCH-08-002:** `The system shall support two search modes: mention (for @-prefixed completions) and assignee (for collaborator selection).`
+- **SRCH-08-002:** `The system shall perform a single user-search query with no mode distinction (no separate mention/assignee modes).`
 - **SRCH-08-003:** `The system shall return matching user ID, login name, full name, and avatar URL in the response payload.`
-- **SRCH-08-004:** `The system shall scope assignee-mode searches to users with write access to the contextual repository.`
+- **SRCH-08-004:** `The system shall not apply write-access scoping; it returns active individual users visible to the requester via a single SearchUsers call.`
 
 ### Event-Driven Requirements (Autocomplete Workflow)
 
-- **SRCH-08-101:** `When a user types into a @mention field with at least 2 characters, the system shall query matching users and return up to 10 suggestions within 200ms.`
+- **SRCH-08-101:** `When a user types into a typeahead field, the system shall query matching users and return up to setting.UI.MembersPagingNum results (default 20); there is no minimum character threshold.`
 - **SRCH-08-102:** `When a user opens an assignee picker on a repository, the system shall return collaborators and team members filtered by the user's read access.`
 - **SRCH-08-103:** `When a typeahead query is submitted for a private repository, the system shall only return users the requester is permitted to see.`
 - **SRCH-08-104:** `When the requester lacks read access to the contextual repository, the system shall return 404 to avoid leaking existence.`
@@ -255,7 +257,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 - **SRCH-08-301:** `If a query would match more than the configured maximum number of users, then the system shall truncate the result and not signal incompleteness to avoid enumeration.`
 - **SRCH-08-302:** `If the requester includes a blocked user in their results, then the system shall exclude that user silently.`
-- **SRCH-08-303:** `If the query string is shorter than the minimum threshold, then the system shall return an empty result set without querying the database.`
+- **SRCH-08-303:** `If the query string is empty, then the system shall still query the database and return matching users (no short-query suppression).`
 
 ---
 
@@ -264,13 +266,13 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 - **BR-08-001:** Repository search applies visibility scoping based on the authenticated user's permissions
 - **BR-08-002:** Code search requires an enabled and initialized code indexer
 - **BR-08-003:** Code indexer applies include/exclude patterns before the MAX_FILE_SIZE check
-- **BR-08-004:** Issue indexer supports Bleve, Elasticsearch, and Meilisearch backends (same as code indexer)
+- **BR-08-004:** Code indexer supports only Bleve and Elasticsearch; issue indexer supports Bleve, Elasticsearch, Meilisearch, and db
 - **BR-08-005:** Non-admin users can only discover public and limited-visibility users in search
-- **BR-08-006:** Explore pages respect the EXPLORE_DISABLE_USERS_PAGE and ONLY_SHOW_RELEVANT_REPOS settings
+- **BR-08-006:** Explore pages respect the [service].DISABLE_USERS_PAGE setting (redirects to /explore/repos, not 404) and ONLY_SHOW_RELEVANT_REPOS
 - **BR-08-007:** Indexer queues use deduplication to prevent redundant indexing of the same content
 - **BR-08-008:** Sitemaps are generated on-demand (not pre-built) and respect access permissions
 - **BR-08-009:** Each sitemap file contains at most 50,000 URLs and must not exceed 50MB
-- **BR-08-010:** Fuzzy search uses Damerau-Levenshtein distance as the default matching algorithm
+- **BR-08-010:** Fuzzy code search uses Levenshtein distance as the default matching algorithm
 - **BR-08-011:** External indexer backends require network connectivity and valid connection strings
 - **BR-08-012:** Indexer startup timeout is configurable and applies per-indexer on system boot
 
@@ -284,7 +286,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 | File exceeds MAX_FILE_SIZE during indexing | Skip file, do not index |
 | Indexer startup exceeds STARTUP_TIMEOUT | Log timeout, proceed without that indexer |
 | Non-admin searches for private users | Exclude private users from results silently |
-| Full rebuild interrupted mid-way | Allow restart of rebuild from beginning |
+| Initial index population interrupted mid-way | Re-runs automatically on next indexer initialization |
 | Sitemap page exceeds 50,000 URLs | Split across multiple sitemap pages |
 | Empty keyword submitted for search | Return all results with applied filters and default sort |
 | Invalid label name in issue filter | Return empty result set for that label criterion |
@@ -299,7 +301,7 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 - User/org search results return within 1 second for keyword queries
 - Explore pages load within 2 seconds with default pagination
 - Indexer queue processes updates without blocking the main application thread
-- Full index rebuild completes without data loss and reports progress
+- Full index population completes without data loss and reports progress
 - Sitemaps conform to the sitemaps.org XML protocol specification
-- Fuzzy search matches approximate typos within Damerau-Levenshtein distance threshold
+- Fuzzy code search matches approximate typos within Levenshtein distance threshold
 - Search result pagination provides consistent ordering across page boundaries
