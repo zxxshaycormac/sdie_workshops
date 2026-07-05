@@ -213,7 +213,7 @@ Baseline specification of Gitea's organization, team, membership, label, project
 
 ## 8. Org Settings
 
-**User Story:** As an organization owner, I want to configure all aspects of my organization including profile, avatar, visibility, repository permissions, and integrations so that the organization operates according to my requirements.
+**User Story:** As an organization owner, I want to configure all aspects of my organization including profile, avatar, visibility, teams and unit permissions, webhooks, OAuth2 applications, Actions secrets and runners, and package settings so that the organization operates according to my requirements.
 
 ### Ubiquitous Requirements (Settings Categories)
 

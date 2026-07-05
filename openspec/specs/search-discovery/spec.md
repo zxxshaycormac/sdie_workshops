@@ -233,31 +233,29 @@ Baseline specification of Gitea's search, indexing, and discovery subsystems. Al
 
 ## 8. Search Candidates Autocomplete (SRCH-08)
 
-**User Story:** As an issue author, I want a fast typeahead search when I @mention a user or pick an assignee so that I can find the right person without leaving the form.
+**User Story:** As a user, I want a fast typeahead search for other users when composing @mentions or selecting collaborators so that I can find the right person without leaving the form.
 
 ### Ubiquitous Requirements (Autocomplete Properties)
 
-- **SRCH-08-001:** `The system shall expose a /user/search_candidates endpoint optimized for low-latency typeahead responses.`
-- **SRCH-08-002:** `The system shall perform a single user-search query with no mode distinction (no separate mention/assignee modes).`
-- **SRCH-08-003:** `The system shall return matching user ID, login name, full name, and avatar URL in the response payload.`
-- **SRCH-08-004:** `The system shall not apply write-access scoping; it returns active individual users visible to the requester via a single SearchUsers call.`
+- **SRCH-08-001:** `The system shall expose a GET /user/search_candidates endpoint that performs a single global SearchUsers query with no repository context and no mode distinction (no separate mention/assignee modes).`
+- **SRCH-08-002:** `The system shall search only active individual users (UserTypeIndividual, IsActive=true); organizations and bots are excluded.`
+- **SRCH-08-003:** `The system shall return matching user ID, login name, full name, and avatar URL in the response payload via convert.ToUsers.`
+- **SRCH-08-004:** `The system shall apply BuildCanSeeUserCondition visibility scoping: admins see all users; non-restricted authenticated users see public and limited-visibility users plus orgs they belong to; restricted users see only orgs they belong to and themselves; anonymous users see only public users.`
 
 ### Event-Driven Requirements (Autocomplete Workflow)
 
 - **SRCH-08-101:** `When a user types into a typeahead field, the system shall query matching users and return up to setting.UI.MembersPagingNum results (default 20); there is no minimum character threshold.`
-- **SRCH-08-102:** `When a user opens an assignee picker on a repository, the system shall return collaborators and team members filtered by the user's read access.`
-- **SRCH-08-103:** `When a typeahead query is submitted for a private repository, the system shall only return users the requester is permitted to see.`
-- **SRCH-08-104:** `When the requester lacks read access to the contextual repository, the system shall return 404 to avoid leaking existence.`
+- **SRCH-08-102:** `When an admin requests candidates, the system shall return all matching active individual users regardless of visibility level.`
+- **SRCH-08-103:** `When a non-admin requests candidates, the system shall exclude private-visibility users and private orgs they are not a member of from the results.`
 
 ### Optional Feature Requirements (Autocomplete Configuration)
 
-- **SRCH-08-201:** `Where an organization restricts member visibility, the system shall only return concealed members to viewers with explicit permission.`
+- **SRCH-08-201:** `Where a user's visibility is set to private, the system shall exclude that user from candidate results for all viewers except the user themselves and admins.`
 
 ### Unwanted Behaviour Requirements (Autocomplete Errors)
 
-- **SRCH-08-301:** `If a query would match more than the configured maximum number of users, then the system shall truncate the result and not signal incompleteness to avoid enumeration.`
-- **SRCH-08-302:** `If the requester includes a blocked user in their results, then the system shall exclude that user silently.`
-- **SRCH-08-303:** `If the query string is empty, then the system shall still query the database and return matching users (no short-query suppression).`
+- **SRCH-08-301:** `If a query matches more than setting.UI.MembersPagingNum users, then the system shall return only the first page of results with no incomplete flag in the response payload.`
+- **SRCH-08-302:** `If the query string is empty, then the system shall still query the database and return matching users (no short-query suppression).`
 
 ---
 
