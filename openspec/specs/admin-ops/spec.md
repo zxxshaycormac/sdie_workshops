@@ -174,7 +174,7 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ### Event-Driven Requirements (Metrics Workflow)
 
-- **ADM-07-101:** `When a client requests /api/v1/metrics, the system shall return current metric values in Prometheus exposition format.`
+- **ADM-07-101:** `When a client requests /metrics, the system shall return current metric values in Prometheus exposition format.`
 - **ADM-07-102:** `When metrics are enabled with a bearer token, the system shall require valid token authentication for the metrics endpoint.`
 
 ### Optional Feature Requirements (Metrics Configuration)
@@ -195,14 +195,14 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ### Ubiquitous Requirements (Health Check Properties)
 
-- **ADM-08-001:** `The system shall expose a health check endpoint at /-/healthz.`
+- **ADM-08-001:** `The system shall expose a health check endpoint at /api/healthz.`
 - **ADM-08-002:** `The system shall report health status as pass, fail, or warn.`
 - **ADM-08-003:** `The system shall perform a database ping check as part of the health evaluation.`
 - **ADM-08-004:** `The system shall perform a cache ping check as part of the health evaluation.`
 
 ### Event-Driven Requirements (Health Check Workflow)
 
-- **ADM-08-101:** `When a client requests /-/healthz, the system shall execute all configured health checks and return the aggregate status.`
+- **ADM-08-101:** `When a client requests /api/healthz, the system shall execute all configured health checks and return the aggregate status.`
 - **ADM-08-102:** `When all health checks pass, the system shall return status pass with HTTP 2xx-3xx.`
 - **ADM-08-103:** `When any health check fails, the system shall return status fail with HTTP 4xx-5xx.`
 - **ADM-08-104:** `When health checks pass but with concerns, the system shall return status warn with HTTP 2xx-3xx.`
@@ -242,7 +242,7 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ### Ubiquitous Requirements (Backup Properties)
 
-- **ADM-10-001:** `The system shall support the following backup archive formats: zip, tar, tar.gz, tar.xz, tar.bz2, tar.br, tar.lz4, and tar.zst.`
+- **ADM-10-001:** `The system shall support the following backup archive formats (9 total): zip, tar, tar.sz, tar.gz, tar.xz, tar.bz2, tar.br, tar.lz4, and tar.zst.`
 - **ADM-10-002:** `The system shall include database dump, repository files, configuration (app.ini), attachments, avatars, LFS objects, package files, and log files in the backup archive.`
 
 ### Event-Driven Requirements (Backup Workflow)
@@ -253,10 +253,13 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 ### Optional Feature Requirements (Backup Selective Skip)
 
 - **ADM-10-201:** `Where --skip-repository is specified, the system shall exclude repository data from the backup archive.`
-- **ADM-10-202:** `Where --skip-lfs is specified, the system shall exclude LFS objects from the backup archive.`
-- **ADM-10-203:** `Where --skip-attachment is specified, the system shall exclude attachments from the backup archive.`
-- **ADM-10-204:** `Where --skip-package is specified, the system shall exclude package files from the backup archive.`
+- **ADM-10-202:** `Where --skip-lfs-data is specified, the system shall exclude LFS objects from the backup archive.`
+- **ADM-10-203:** `Where --skip-attachment-data is specified, the system shall exclude attachments from the backup archive.`
+- **ADM-10-204:** `Where --skip-package-data is specified, the system shall exclude package files from the backup archive.`
 - **ADM-10-205:** `Where --skip-log is specified, the system shall exclude log files from the backup archive.`
+- **ADM-10-206:** `Where --skip-custom-dir is specified, the system shall exclude the custom directory from the backup archive.`
+- **ADM-10-207:** `Where --skip-index is specified, the system shall exclude bleve index data from the backup archive.`
+- **ADM-10-208:** `Where --skip-db is specified, the system shall exclude the database dump from the backup archive.`
 
 ### Unwanted Behaviour Requirements (Backup Errors)
 
@@ -272,7 +275,7 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 ### Ubiquitous Requirements (Logging Properties)
 
 - **ADM-11-001:** `The system shall support the following log levels in order of severity: TRACE, DEBUG, INFO, WARN, ERROR, FATAL.`
-- **ADM-11-002:** `The system shall support multiple simultaneous log output modes (console, file, conn, smtp).`
+- **ADM-11-002:** `The system shall support multiple simultaneous log output modes (console, file, conn).`
 - **ADM-11-003:** `The system shall allow independent configuration per log mode via [log.*] configuration sections.`
 
 ### Event-Driven Requirements (Logging Workflow)
@@ -286,12 +289,10 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 - **ADM-11-201:** `Where console mode is configured, the system shall output log events to the terminal with color support.`
 - **ADM-11-202:** `Where file mode is configured, the system shall write log events to a rotating file on disk.`
 - **ADM-11-203:** `Where conn mode is configured, the system shall send log events to a network connection.`
-- **ADM-11-204:** `Where smtp mode is configured, the system shall send log events via email.`
 
 ### Unwanted Behaviour Requirements (Logging Errors)
 
 - **ADM-11-301:** `If a log file cannot be written (permission denied, disk full), then the system shall fall back to console logging and report the error.`
-- **ADM-11-302:** `If an SMTP log mode connection fails, then the system shall fall back to console logging for that mode and log the connection error.`
 
 ---
 
@@ -301,21 +302,24 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ### Ubiquitous Requirements (PProf Properties)
 
-- **ADM-12-001:** `The system shall expose the following pprof endpoints: heap, goroutine, threadcreate, block, mutex, cmdline, profile, symbol, and trace.`
-- **ADM-12-002:** `The system shall present a pprof index page at /debug/pprof/ listing all available profiles.`
+- **ADM-12-001:** `The system shall, when pprof is enabled, run it on a separate HTTP server listening on localhost:6060 (loopback only), not on the main Gitea web server.`
+- **ADM-12-002:** `The system shall expose the standard net/http/pprof endpoints on the pprof server: heap, goroutine, threadcreate, block, mutex, cmdline, profile, symbol, and trace, under /debug/pprof/.`
+- **ADM-12-003:** `The system shall expose a /debug/fgprof endpoint on the pprof server for on-CPU and off-CPU activity reporting.`
+- **ADM-12-004:** `The system shall expose an admin diagnosis endpoint at /admin/monitor/diagnosis that returns a ZIP archive containing a CPU profile, goroutine dump (before and after), and a heap dump.`
+- **ADM-12-005:** `The system shall expose an admin stacktrace viewer at /admin/monitor/stacktrace that lists goroutines and allows cancelling processes by PID.`
 
 ### Event-Driven Requirements (PProf Workflow)
 
-- **ADM-12-101:** `When a client requests /debug/pprof/profile with a duration parameter, the system shall capture a CPU profile for that duration and return it.`
-- **ADM-12-102:** `When a client requests /debug/pprof/trace with a duration parameter, the system shall capture an execution trace for that duration and return it.`
+- **ADM-12-101:** `When a client requests /debug/pprof/profile on the pprof server (localhost:6060) with a duration parameter, the system shall capture a CPU profile for that duration and return it.`
+- **ADM-12-102:** `When a client requests /debug/pprof/trace on the pprof server (localhost:6060) with a duration parameter, the system shall capture an execution trace for that duration and return it.`
 
 ### Optional Feature Requirements (PProf Configuration)
 
-- **ADM-12-201:** `Where PprofEnabled configuration is set to true, the system shall register and serve the pprof HTTP endpoints.`
+- **ADM-12-201:** `Where [server].ENABLE_PPROF is set to true, the system shall start the pprof server on localhost:6060 bound to loopback only and shall not expose profiling endpoints on the public web server.`
 
 ### Unwanted Behaviour Requirements (PProf Constraints)
 
-- **ADM-12-301:** `If PprofEnabled is not set, then the system shall not register pprof endpoints and shall return 404 for all /debug/pprof/* requests.`
+- **ADM-12-301:** `If [server].ENABLE_PPROF is not set (default false), then the system shall not start the pprof server and shall not serve any /debug/pprof/* routes on the main web server.`
 - **ADM-12-302:** `If a CPU profile or trace capture is requested with an excessively long duration, then the system shall limit the duration to a safe maximum.`
 
 ---
@@ -327,15 +331,15 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 ### Ubiquitous Requirements (Notice Properties)
 
 - **ADM-13-001:** `The system shall record admin notices for noteworthy runtime events including cron failures, migration errors, and storage backend issues.`
-- **ADM-13-002:** `The system shall classify each notice by type (warning, error, info).`
+- **ADM-13-002:** `The system shall classify each notice by type using NoticeRepository (1) and NoticeTask (2) as the only two notice types.`
 - **ADM-13-003:** `The system shall timestamp and store the notice description and originating context.`
 
 ### Event-Driven Requirements (Notice Workflow)
 
 - **ADM-13-101:** `When a runtime event warrants admin attention, the system shall insert a notice record.`
 - **ADM-13-102:** `When an admin navigates to /admin/notices, the system shall render the paginated notice list.`
-- **ADM-13-103:** `When an admin dismisses a notice, the system shall mark the notice as resolved and remove it from the active list.`
-- **ADM-13-104:** `When an admin triggers bulk dismissal, the system shall resolve every selected notice in a single transaction.`
+- **ADM-13-103:** `When an admin dismisses a notice, the system shall permanently delete the notice record from the database.`
+- **ADM-13-104:** `When an admin triggers bulk dismissal, the system shall permanently delete every selected notice by ID.`
 - **ADM-13-105:** `When a new notice is created after the admin dashboard was last viewed, the system shall display a notice badge on the admin navigation.`
 
 ### Unwanted Behaviour Requirements (Notice Errors)
@@ -353,14 +357,16 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 - **ADM-14-001:** `The system shall provide a doctor subcommand exposing a curated set of consistency checks.`
 - **ADM-14-002:** `The system shall classify each check as either read-only (diagnostic) or repairing (writes changes).`
-- **ADM-14-003:** `The system shall expose checks covering authorized SSH keys, repository count integrity, dangling LFS objects, orphaned hooks, broken symlink references, and stale archive caches.`
+- **ADM-14-003:** `The system shall expose a non-exhaustive set of approximately 27 consistency checks including: authorized SSH keys, repository count integrity, dangling LFS objects, orphaned hooks, broken symlink references, stale archive caches, script-type availability, recalculate-stars-number, enable-push-options, check-git-daemon-export-ok, check-commit-graphs, recalculate-merge-bases, check-user-email, check-user-names, check-user-type, disable-mirror-actions-unit, fix-broken-repo-units, fix-owner-team-create-org-repo, synchronize-repo-heads, storage-attachments, storage-avatars, storage-packages, database version, paths consistency, DB consistency, and fix #16961 / #8312.`
+- **ADM-14-004:** `The system shall provide a doctor recreate-table subcommand that recreates database tables from XORM definitions and copies data over, deleting old columns.`
+- **ADM-14-005:** `The system shall provide a doctor convert subcommand that converts the database between storage configurations.`
 
 ### Event-Driven Requirements (Doctor Workflow)
 
 - **ADM-14-101:** `When an admin runs the doctor check command without arguments, the system shall run all read-only checks and report any failures.`
 - **ADM-14-102:** `When an admin runs doctor with a specific check name, the system shall execute only that check.`
 - **ADM-14-103:** `When an admin runs doctor with the --fix flag, the system shall execute every repairing check and apply fixes.`
-- **ADM-14-104:** `When a repairing check encounters a destructive fix, the system shall prompt for confirmation unless --yes is supplied.`
+- **ADM-14-104:** `When an admin runs doctor check, the system shall accept the following flags: list, default, run, all, fix, log-file, and color.`
 - **ADM-14-105:** `When a check completes successfully, the system shall print a summary and exit 0; on failure the system shall exit non-zero.`
 
 ### State-Driven Requirements (Doctor Safety)
@@ -385,7 +391,7 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 
 ### Ubiquitous Requirements (CLI Properties)
 
-- **ADM-15-001:** `The system shall expose a single gitea binary with subcommands including web, serv, admin, doctor, dump, hook, keys, migrate, migrate-storage, manager, restore-cert, generate, convert, checks, and help.`
+- **ADM-15-001:** `The system shall expose a single gitea binary with subcommands including web, serv, admin, doctor, dump, hook, keys, migrate, migrate-storage, manager, embedded, dump-repository, restore-repository, actions, cert, generate, docs, and help.`
 - **ADM-15-002:** `The system shall load configuration from custom/conf/app.ini before executing any subcommand.`
 - **ADM-15-003:** `The system shall accept command-line flags and GITEA__ prefixed environment variables as configuration overrides.`
 
@@ -399,6 +405,10 @@ Baseline specification of Gitea's administration dashboard, configuration, obser
 - **ADM-15-106:** `When an operator runs gitea dump, the system shall produce a backup archive per ADM-10.`
 - **ADM-15-107:** `When an operator runs gitea migrate, the system shall execute pending database migrations without starting the server.`
 - **ADM-15-108:** `When an operator runs gitea migrate-storage, the system shall transfer attachments, LFS objects, packages, or avatars between storage backends.`
+- **ADM-15-109:** `When an operator runs gitea admin sendmail, the system shall dispatch an email message to all users from the command line.`
+- **ADM-15-110:** `When an operator runs gitea admin regenerate hooks, the system shall regenerate repository hook files from the command line.`
+- **ADM-15-111:** `When an operator runs gitea admin regenerate keys, the system shall regenerate the authorized_keys file from the command line.`
+- **ADM-15-112:** `When an operator runs gitea manager with a subcommand (shutdown, restart, reload-templates, flush-queues, logging, processes), the system shall manage the running Gitea process.`
 
 ### Optional Feature Requirements (CLI Configuration)
 
@@ -441,6 +451,27 @@ The following INI sections configure administration and operations behaviors.
 - **DB_RETRIES**, **DB_RETRY_BACKOFF**: Connection retry behavior during startup.
 - **MAX_IDLE_CONNS**, **MAX_OPEN_CONNS**, **CONN_MAX_LIFETIME**: Connection pool tuning.
 
+### [queue] Section
+
+- **TYPE**: Queue backend (`channel`, `level`, `redis`, `dummy`; default `level`).
+- **DATADIR**: Data directory for level/leveldb-backed queues (relative to AppDataPath, default `queues/common`).
+- **CONN_STR**: Connection string for redis/leveldb backends (e.g. `redis://127.0.0.1:6379/0`).
+- **LENGTH**: Maximum queue length before blocking (default 100000).
+- **BATCH_LENGTH**: Number of items processed per batch (default 20).
+- **MAX_WORKERS**: Maximum number of workers (default NumCPU/2, clamped to 1-10).
+
+### [metrics] Section
+
+- **ENABLED**: Enable the Prometheus metrics endpoint at /metrics (default false).
+- **TOKEN**: Bearer token required to access the metrics endpoint (empty = no auth).
+- **ENABLED_ISSUE_BY_LABEL**: Expose per-label issue count metrics (default false).
+- **ENABLED_ISSUE_BY_REPOSITORY**: Expose per-repository issue count metrics (default false).
+
+### [server] PProf Keys
+
+- **ENABLE_PPROF**: Enable the pprof server on localhost:6060 (default false).
+- **PPROF_DATA_PATH**: Directory for pprof data files (default `<AppWorkPath>/data/tmp/pprof`).
+
 ---
 
 ## Business Rules
@@ -453,8 +484,8 @@ The following INI sections configure administration and operations behaviors.
 - **BR-07-006:** The minimum database schema version is 70
 - **BR-07-007:** Queue worker count adjustments are dynamic and do not require restart
 - **BR-07-008:** Metrics endpoint requires ENABLED=true in [metrics] configuration
-- **BR-07-009:** Health check endpoint (/ -/healthz) is always available regardless of configuration
-- **BR-07-010:** PProf endpoints are disabled by default and must be explicitly enabled via PprofEnabled
+- **BR-07-009:** Health check endpoint (/api/healthz) is always available regardless of configuration
+- **BR-07-010:** PProf server is disabled by default and must be explicitly enabled via [server].ENABLE_PPROF; when enabled it binds to localhost:6060 only
 - **BR-07-011:** Backup archives contain all data by default; individual categories are excluded via flags
 - **BR-07-012:** Log levels are hierarchical: TRACE < DEBUG < INFO < WARN < ERROR < FATAL
 - **BR-07-013:** Authentication source order determines precedence when multiple sources match a user (see AUTH-06 for source types and features)
@@ -472,7 +503,7 @@ The following INI sections configure administration and operations behaviors.
 | Insufficient disk space during backup | Fail with disk space error |
 | Queue backend connection loss | Log error, fall back to in-memory processing |
 | Metrics endpoint requested when disabled | Return 404 |
-| PProf requested when not enabled | Return 404 for all /debug/pprof/* paths |
+| PProf requested when not enabled | PProf server not started; no /debug/pprof/* routes served |
 | Log file write failure | Fall back to console logging |
 | LDAP sync during source outage | Log error, continue with cached user data |
 | Last admin user deletion attempt | Deny deletion |
