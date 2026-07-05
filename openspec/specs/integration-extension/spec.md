@@ -1,6 +1,6 @@
 # 09 — Integration & Extension
 
-Baseline specification of Gitea's REST API, markup rendering, theming, customization, SSH, email, internationalization, CAPTCHA, avatars, proxy, update checking, and Git Smart HTTP subsystems. All requirements describe the current (v1.22.x) system behavior.
+Baseline specification of Gitea's REST API, markup rendering, theming, customization, SSH, email, internationalization, CAPTCHA, avatars, proxy, update checking, Git Smart HTTP, OAuth2 client and provider, federation/ActivityPub, and event-stream subsystems. All requirements describe the current (v1.22.x) system behavior.
 
 ---
 
@@ -20,7 +20,6 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 - **INT-01-101:** `When a client sends an API request with valid credentials, the system shall process the request and return the appropriate response.`
 - **INT-01-102:** `When a client requests a paginated resource, the system shall return a page of results with HTTP Link headers for navigation.`
-- **INT-01-103:** `When the API rate limit is exceeded, the system shall return HTTP 429 with a Retry-After header.`
 - **INT-01-104:** `When a client sends a conditional request with an If-None-Match header, the system shall return HTTP 304 if the resource ETag has not changed.`
 - **INT-01-105:** `When the API is disabled via configuration, the system shall reject all API requests with HTTP 404.`
 
@@ -41,7 +40,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 ## 2. Markup Renderers
 
-**User Story:** As a user, I want rendered documents in multiple formats (Markdown, reStructuredText, Jupyter, AsciiDoc, Org) with syntax highlighting so that I can read rich content in repositories, issues, and comments.
+**User Story:** As a user, I want rendered documents in multiple formats (Markdown, reStructuredText, AsciiDoc, Org) with syntax highlighting so that I can read rich content in repositories, issues, and comments.
 
 ### Ubiquitous Requirements (Rendering Engine)
 
@@ -53,10 +52,11 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 ### Event-Driven Requirements (Rendering Workflow)
 
 - **INT-02-101:** `When a user views a file with a recognized markup extension, the system shall render the file content as formatted HTML instead of displaying raw source.`
-- **INT-02-102:** `When a user views a Jupyter Notebook (.ipynb), the system shall render the notebook cells with code output, tables, and embedded images.`
 - **INT-02-103:** `When a user views a CSV file, the system shall render the content as an interactive table.`
-- **INT-02-104:** `When a user views a PDF file, the system shall provide an inline PDF viewer.`
 - **INT-02-105:** `When Markdown content contains mathematical notation, the system shall render the notation using KaTeX.`
+- **INT-02-106:** `When Markdown content contains a Mermaid diagram code block, the system shall render the diagram, truncating source exceeding the configured MERMAID_MAX_SOURCE_CHARACTERS (default 5000).`
+- **INT-02-107:** `When a user views an Asciicast terminal recording file (.cast), the system shall render an embedded asciinema player referencing the file's raw URL.`
+- **INT-02-108:** `When a user views a console session file (.sh-session) or a file containing ANSI escape sequences, the system shall render the terminal output as styled HTML.`
 
 ### Optional Feature Requirements (Additional Renderers)
 
@@ -80,10 +80,10 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 ### Ubiquitous Requirements (Theme Properties)
 
-- **INT-03-001:** `The system shall provide three built-in themes: gitea (light), gitea-dark (dark), and gitea-auto (system preference).`
+- **INT-03-001:** `The system shall provide five built-in themes: gitea-light, gitea-dark, gitea-auto (system preference), gitea-light-protanopia-deuteranopia, and gitea-dark-protanopia-deuteranopia.`
 - **INT-03-002:** `The system shall apply themes through CSS stylesheets without requiring page reload.`
 - **INT-03-003:** `The system shall store the user's theme preference in user settings.`
-- **INT-03-004:** `The system shall apply the configured default theme to unauthenticated users and users with no preference set.`
+- **INT-03-004:** `The system shall apply the configured default theme (default gitea-auto) to unauthenticated users and users with no preference set.`
 
 ### Event-Driven Requirements (Theme Workflow)
 
@@ -99,7 +99,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 ### Unwanted Behaviour Requirements (Theme Errors)
 
 - **INT-03-301:** `If a user's stored theme references a theme that is no longer available, then the system shall fall back to the configured default theme.`
-- **INT-03-302:** `If a custom theme CSS file fails to load, then the system shall fall back to the default gitea theme.`
+- **INT-03-302:** `If a custom theme CSS file fails to load, then the system shall fall back to the configured default theme.`
 
 ---
 
@@ -204,7 +204,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 - **INT-07-001:** `The system shall store translations in INI-format locale files keyed by language code.`
 - **INT-07-002:** `The system shall provide English as the default and fallback language.`
-- **INT-07-003:** `The system shall support over 30 languages with locale-specific translations.`
+- **INT-07-003:** `The system shall support approximately 28 languages with locale-specific translations.`
 - **INT-07-004:** `The system shall support pluralization rules appropriate to each language.`
 
 ### Event-Driven Requirements (Language Workflow)
@@ -298,13 +298,13 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 ### Event-Driven Requirements (Proxy Workflow)
 
 - **INT-10-101:** `When the system makes an outbound request (webhook, avatar lookup, update check), the system shall route the request through the configured proxy unless the target host matches a bypass rule.`
-- **INT-10-102:** `When the PROXY protocol is enabled and a connection arrives from a trusted proxy IP, the system shall extract the original client IP from the PROXY protocol header.`
+- **INT-10-102:** `When the global USE_PROXY_PROTOCOL setting is enabled, the system shall parse the PROXY protocol header on every incoming connection to recover the original client IP regardless of source.`
 - **INT-10-103:** `When the PROXY protocol header indicates a v1 or v2 format, the system shall parse the appropriate version correctly.`
 
 ### Optional Feature Requirements (Proxy Configuration)
 
 - **INT-10-201:** `Where proxy authentication is configured, the system shall include credentials in the proxy connection request.`
-- **INT-10-202:** `Where trusted proxy IP ranges are configured, the system shall only accept PROXY protocol headers from those IP ranges.`
+- **INT-10-202:** `Where the REVERSE_PROXY_TRUSTED_PROXIES list is configured, the system shall only trust X-Forwarded-For headers from those IP ranges when parsing the client IP for reverse-proxy authentication.`
 - **INT-10-203:** `Where no proxy is configured, the system shall make direct outbound connections.`
 
 ### Unwanted Behaviour Requirements (Proxy Errors)
@@ -386,6 +386,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 - **INT-13-002:** `The system shall support per-provider configuration of client ID, client secret, authorization endpoints, token endpoints, profile endpoints, and scopes.`
 - **INT-13-003:** `The system shall map the external profile fields (username, email, full name, avatar URL) to local account attributes using configurable attribute mapping.`
 - **INT-13-004:** `The system shall treat OAuth2 client login as one of the AUTH-06 authentication source types.`
+- **INT-13-005:** `The system shall support the following 16 built-in external OAuth2/OpenID Connect providers: github, gitlab, gplus (Google), gitea, nextcloud, mastodon, azureadv2 (Azure AD v2), bitbucket, dropbox, facebook, twitter, discord, yandex, azuread, microsoftonline, and openidConnect (generic OpenID Connect).`
 
 ### Event-Driven Requirements (OAuth2 Client Workflow)
 
@@ -419,7 +420,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 - **INT-14-001:** `The system shall rewrite external image URLs in rendered markdown content to route through the configured camo proxy URL.`
 - **INT-14-002:** `The system shall preserve the original URL as an encrypted or HMAC-signed query parameter so the proxy can fetch the original resource.`
-- **INT-14-003:** `The system shall leave relative URLs, same-origin URLs, and URLs matching the configured bypass patterns unchanged.`
+- **INT-14-003:** `The system shall leave relative URLs, same-origin URLs, and (by default) HTTPS URLs unchanged; only absolute non-same-origin HTTP image URLs are rewritten unless ALLWAYS is set.`
 
 ### Event-Driven Requirements (Camo Workflow)
 
@@ -429,9 +430,8 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 ### Optional Feature Requirements (Camo Configuration)
 
-- **INT-14-201:** `Where camo is enabled, the system shall rewrite all non-same-origin image URLs by default.`
+- **INT-14-201:** `Where camo is enabled and ALLWAYS is false (default), the system shall rewrite only absolute non-same-origin HTTP image URLs, leaving HTTPS URLs unchanged.`
 - **INT-14-202:** `Where camo is disabled (default), the system shall emit external image URLs as-is.`
-- **INT-14-203:** `Where a camo bypass list is configured, the system shall skip rewriting for URLs whose host matches the bypass list.`
 
 ### Unwanted Behaviour Requirements (Camo Errors)
 
@@ -449,7 +449,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 - **INT-15-001:** `The system shall expose a /user/events endpoint delivering server-sent events over a persistent HTTP connection.`
 - **INT-15-002:** `The system shall frame each event with the SSE wire format: a leading event: line, a data: line, and a blank-line terminator.`
-- **INT-15-003:** `The system shall send periodic heartbeat comments to keep intermediary proxies from closing idle connections.`
+- **INT-15-003:** `The system shall send periodic heartbeat events as a named "ping" event (every 30 seconds) to keep intermediary proxies from closing idle connections.`
 - **INT-15-004:** `The system shall scope every event payload to the authenticated user's notifications, mentions, status changes, and timeline activity.`
 
 ### Event-Driven Requirements (SSE Workflow)
@@ -466,8 +466,7 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 ### Unwanted Behaviour Requirements (SSE Errors)
 
-- **INT-15-301:** `If an unauthenticated client requests /user/events, then the system shall return HTTP 401.`
-- **INT-15-302:** `If a single user exceeds the configured maximum concurrent SSE connections, then the system shall reject additional connections with HTTP 429.`
+- **INT-15-301:** `If an unauthenticated client requests /user/events, then the system shall return HTTP 200 with an SSE event named "close" containing the data "unauthorized".`
 - **INT-15-303:** `If an event payload cannot be serialized, then the system shall log the error and skip the event rather than close the connection.`
 
 ---
@@ -504,17 +503,70 @@ Baseline specification of Gitea's REST API, markup rendering, theming, customiza
 
 ---
 
+## 17. OAuth2 Provider / Authorization Server (INT-17)
+
+**User Story:** As an administrator or third-party application developer, I want Gitea to act as an OAuth2 authorization server so that external applications can obtain delegated access tokens to the Gitea API on behalf of users.
+
+### Ubiquitous Requirements (OAuth2 Provider Properties)
+
+- **INT-17-001:** `The system shall expose OAuth2 authorization-server endpoints under the /login/oauth path prefix when OAuth2 is enabled (default enabled).`
+- **INT-17-002:** `The system shall issue signed JWT-based access tokens and refresh tokens using the configured JWT signing algorithm (default RS256) and private key file.`
+- **INT-17-003:** `The system shall allow users to register OAuth2 applications (clients) with redirect URIs, client secrets, and scoped access.`
+- **INT-17-004:** `The system shall expose the following endpoints: GET/POST /login/oauth/authorize, POST /login/oauth/grant, POST /login/oauth/access_token, GET /login/oauth/userinfo, GET /login/oauth/keys, and POST /login/oauth/introspect.`
+- **INT-17-005:** `The system shall seed a set of default OAuth2 applications (git-credential-oauth, git-credential-manager, tea) unless overridden by configuration.`
+
+### Event-Driven Requirements (OAuth2 Provider Workflow)
+
+- **INT-17-101:** `When an unauthenticated user hits /login/oauth/authorize, the system shall require sign-in before proceeding with the authorization grant.`
+- **INT-17-102:** `When a signed-in user approves an authorization request, the system shall redirect to the client's redirect URI with an authorization code.`
+- **INT-17-103:** `When a client posts a valid authorization code and client credentials to /login/oauth/access_token, the system shall return access and refresh tokens.`
+- **INT-17-104:** `When a client presents a valid access token to /login/oauth/userinfo, the system shall return the resource-owner claims.`
+- **INT-17-105:** `When a client posts a token to /login/oauth/introspect, the system shall return the token's active state and metadata.`
+
+### Optional Feature Requirements (OAuth2 Provider Configuration)
+
+- **INT-17-201:** `Where OAuth2 is explicitly disabled via ENABLED=false, the system shall refuse all /login/oauth requests.`
+- **INT-17-202:** `Where the access-token expiration time is configured, the system shall honor it (default 3600 seconds).`
+- **INT-17-203:** `Where the refresh-token expiration time is configured, the system shall honor it (default 730 hours).`
+- **INT-17-204:** `Where INVALIDATE_REFRESH_TOKENS is enabled, the system shall invalidate a refresh token after it has been used to mint a new access token.`
+
+### Unwanted Behaviour Requirements (OAuth2 Provider Errors)
+
+- **INT-17-301:** `If a client submits an invalid authorization code, the system shall reject the token request with an OAuth2 error response.`
+- **INT-17-302:** `If a client submits credentials for a non-existent or disabled application, the system shall reject the request.`
+- **INT-17-303:** `If the configured JWT signing private key file is missing or unreadable, the system shall fail to start with a fatal error.`
+
+---
+
+## 18. Federation / ActivityPub (INT-18)
+
+**User Story:** As a user on a federated Gitea instance, I want my repository activity to be discoverable over ActivityPub so that users on other instances can follow and interact.
+
+### Optional Feature Requirements (Federation)
+
+- **INT-18-201:** `Where the [federation] ENABLED setting is true (default false), the system shall expose an ActivityPub API under /api/v1/activitypub for user and repository actors.`
+- **INT-18-202:** `Where federation is enabled, the system shall sign outbound federation requests using HTTP Signatures with the configured algorithms (default rsa-sha256, rsa-sha512, ed25519).`
+- **INT-18-203:** `Where SHARE_USER_STATISTICS is enabled (default true), the system may publish aggregated user statistics to the federation.`
+
+### Unwanted Behaviour Requirements (Federation Errors)
+
+- **INT-18-301:** `If a federation payload exceeds MAX_SIZE (default 4 MiB), the system shall reject it.`
+- **INT-18-302:** `If DIGEST_ALGORITHM is unsupported, the system shall refuse to start.`
+
+---
+
 ## Configuration Reference
 
 The following INI sections configure integration and extension behaviors.
 
 ### [ssh.minimum_key_sizes] Section
 
-Per-key-type minimum bit-length policy enforced when a user registers an SSH key.
-- **ED25519**: Minimum bits for ED25519 keys (default 0 = unset).
+Per-key-type minimum bit-length policy enforced when a user registers an SSH key. (DSA is not supported by Gitea.)
+- **ED25519**: Minimum bits for ED25519 keys (default 256).
+- **ED25519_SK**: Minimum bits for ED25519 hardware security key (default 256).
 - **ECDSA**: Minimum bits for ECDSA keys (default 256).
-- **RSA**: Minimum bits for RSA keys (default 2048).
-- **DSA**: Minimum bits for DSA keys (default 1024).
+- **ECDSA_SK**: Minimum bits for ECDSA hardware security key (default 256).
+- **RSA**: Minimum bits for RSA keys (default 3071).
 
 ### [time] Section
 
@@ -528,7 +580,48 @@ Each external renderer is configured as a `[markup.<name>]` section.
 - **FILE_EXTENSIONS**: Comma-separated extensions handled by this renderer.
 - **RENDER_COMMAND**: External command to execute on file content.
 - **IS_INPUT_FILE**: Whether the renderer takes a filename (true) or stdin (false).
-- **RENDER_CONTENT_MODE**: How output is wrapped (`sanitized`, `no-sanitizer`, `image`).
+- **RENDER_CONTENT_MODE**: How output is wrapped (`sanitized`, `no-sanitizer`, `iframe`).
+
+### [camo] Section
+
+Configuration for the go-camo-style image proxy. When ENABLED, both SERVER_URL and HMAC_KEY are required.
+- **ENABLED**: Activate camo image proxying (default false).
+- **SERVER_URL**: Base URL of the camo proxy.
+- **HMAC_KEY**: Shared HMAC-SHA1 secret used to sign proxied URLs.
+- **ALLWAYS**: If true, rewrite all absolute non-same-origin image URLs (including HTTPS); if false (default), rewrite only HTTP URLs.
+
+### [oauth2] Section
+
+Controls Gitea acting as an OAuth2 authorization server (see INT-17). Also generates the JWT secret reused as the general token-signing secret.
+- **ENABLED**: Enable the OAuth2 provider (default true).
+- **JWT_SIGNING_ALGORITHM**: Algorithm for signing JWTs (default `RS256`).
+- **JWT_SIGNING_PRIVATE_KEY_FILE**: Path to the JWT private key (default `jwt/private.pem` under AppDataPath).
+- **JWT_SECRET** / **JWT_SECRET_URI**: Alternatively, an inline base64 JWT secret.
+- **ACCESS_TOKEN_EXPIRATION_TIME**: Access-token lifetime in seconds (default 3600).
+- **REFRESH_TOKEN_EXPIRATION_TIME**: Refresh-token lifetime in hours (default 730).
+- **INVALIDATE_REFRESH_TOKENS**: Rotate refresh tokens on use (default false).
+- **MAX_TOKEN_LENGTH**: Maximum OAuth2 token length (default 32767).
+- **DEFAULT_APPLICATIONS**: Comma-separated list of seeded default OAuth2 applications (default `git-credential-oauth,git-credential-manager,tea`); empty string disables seeding.
+
+### [oauth2_client] Section
+
+Controls Gitea acting as an OAuth2/OpenID Connect *client* (see INT-13).
+- **ENABLE_AUTO_REGISTRATION**: Create a local account automatically when no matching user exists (default false).
+- **USERNAME**: Which provider claim to derive the Gitea username from (`userid`, `nickname`, `email`, `preferred_username`; default `nickname`).
+- **ACCOUNT_LINKING**: Behaviour when an external identity matches an existing account (`disabled`, `login`, `auto`; default `login`).
+- **UPDATE_AVATAR**: Sync the avatar from the provider on login (default false).
+- **OPENID_CONNECT_SCOPES**: Space-separated scopes sent to OpenID Connect providers.
+- **REGISTER_EMAIL_CONFIRM**: Require email confirmation after OAuth2 auto-registration (inherits from `[service] REGISTER_EMAIL_CONFIRM` by default).
+
+### [federation] Section
+
+Controls ActivityPub federation (see INT-18). Disabled by default.
+- **ENABLED**: Enable federation endpoints and signing (default false).
+- **SHARE_USER_STATISTICS**: Publish aggregated user statistics (default true).
+- **MAX_SIZE**: Maximum federation payload size in MiB (default 4).
+- **ALGORITHMS**: Supported HTTP-Signature algorithms (default `rsa-sha256,rsa-sha512,ed25519`).
+- **DIGEST_ALGORITHM**: Digest algorithm for federation (default `SHA-256`).
+- **GET_HEADERS** / **POST_HEADERS**: Headers covered by the HTTP signature.
 
 ---
 
@@ -542,7 +635,7 @@ Each external renderer is configured as a `[markup.<name>]` section.
 - **BR-09-006:** Email notifications are queued and delivered asynchronously; delivery order is not guaranteed
 - **BR-09-007:** English is the always-available fallback language; translation keys not found in the selected locale fall back to English
 - **BR-09-008:** Avatar resolution follows a strict priority: local upload > federated avatar > Gravatar > generated fallback
-- **BR-09-009:** PROXY protocol headers are only trusted from explicitly configured IP ranges
+- **BR-09-009:** USE_PROXY_PROTOCOL is a global boolean applied to all connections; the REVERSE_PROXY_TRUSTED_PROXIES list governs only X-Forwarded-For header trust, not PROXY protocol parsing
 - **BR-09-010:** Update checker frequency is fixed; only the channel and endpoint are configurable
 - **BR-09-011:** Git Smart HTTP authentication reuses the same token and credential system as the REST API
 - **BR-09-012:** Custom static assets in custom/public/ always take precedence over embedded bindata assets
@@ -554,7 +647,7 @@ Each external renderer is configured as a `[markup.<name>]` section.
 |----------|----------------|
 | API request with expired OAuth2 token | Return HTTP 401 Unauthorized |
 | Markdown file with mixed GFM and raw HTML | Sanitize HTML while preserving GFM features |
-| Custom theme references deleted CSS file | Fall back to default gitea theme |
+| Custom theme references deleted CSS file | Fall back to configured default theme |
 | Custom template with invalid Go syntax | Log error, fall back to default template |
 | SSH key uploaded that matches another user | Reject key addition with duplicate error |
 | SMTP server down during notification | Queue email for retry, log connection error |
@@ -562,7 +655,7 @@ Each external renderer is configured as a `[markup.<name>]` section.
 | Locale file with invalid INI syntax | Skip file, log warning, use English fallback |
 | CAPTCHA provider timeout during registration | Reject submission, display error to user |
 | Gravatar service unreachable for avatar | Display generated identicon or initial avatar |
-| PROXY protocol header from untrusted IP | Ignore header, use direct connection IP |
+| X-Forwarded-For header from untrusted proxy IP | Ignore header, use direct connection IP |
 | Update check endpoint returns malformed JSON | Log warning, skip update notification |
 | Git push to read-only repository over HTTP | Reject with HTTP 403 Forbidden |
 | Git LFS object exceeds storage limit | Reject upload with appropriate error |
