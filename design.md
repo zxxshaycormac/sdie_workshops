@@ -265,3 +265,8 @@ This section governs cross-cutting UI behavior — the contracts every page shou
 **Why**: Consistent defaults let power users transfer muscle memory across pages. Discoverability via `?` ensures new users find the shortcuts without documentation.
 **Frequency**: common for high-traffic pages.
 **Exceptions**: Single-purpose admin pages may omit shortcuts; pages with text inputs shall suppress single-key shortcuts while the input has focus.
+
+**Rule**: Each semantically-distinct value of a displayed enum shall render with a distinct visual treatment — icon, color, or label — across every presentation surface that displays it. A branch that "accepts" a value but maps it to the same glyph as another value is a latent bug; the collision is especially likely to surface when a downstream fix newly makes a previously-collapsed value reachable.
+**Why**: Users act on status at a glance; two meanings sharing one glyph are indistinguishable. Where rendering is duplicated across surfaces (e.g. paired server and client templates), distinctness must hold in every copy — a correct value can still collide in a surface that was never updated.
+**Frequency**: universal for any displayed enum (status badges, commit states, run/job outcomes, etc.).
+**Exceptions**: values genuinely synonymous to the user may share a glyph (e.g. an `unknown` fallback), as a deliberate, commented choice — never as an accidental fallthrough.
