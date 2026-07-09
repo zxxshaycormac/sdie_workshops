@@ -153,26 +153,47 @@ func UpdateRunJob(ctx context.Context, job *ActionRunJob, cond builder.Cond, col
 }
 
 func aggregateJobStatus(jobs []*ActionRunJob) Status {
+	if len(jobs) == 0 {
+		return StatusSuccess
+	}
+
 	allDone := true
 	allWaiting := true
 	hasFailure := false
+	hasCancelled := false
+	hasSuccess := false
+
 	for _, job := range jobs {
 		if !job.Status.IsDone() {
 			allDone = false
 		}
-		if job.Status != StatusWaiting && !job.Status.IsDone() {
+		// Blocked is treated like Waiting — both mean the job hasn't started yet
+		if job.Status != StatusWaiting && job.Status != StatusBlocked && !job.Status.IsDone() {
 			allWaiting = false
 		}
-		if job.Status == StatusFailure || job.Status == StatusCancelled {
+		switch job.Status {
+		case StatusFailure:
 			hasFailure = true
+		case StatusCancelled:
+			hasCancelled = true
+		case StatusSuccess:
+			hasSuccess = true
 		}
 	}
+
 	if allDone {
 		if hasFailure {
 			return StatusFailure
 		}
-		return StatusSuccess
+		if hasCancelled {
+			return StatusCancelled
+		}
+		if hasSuccess {
+			return StatusSuccess
+		}
+		return StatusSkipped
 	}
+
 	if allWaiting {
 		return StatusWaiting
 	}
