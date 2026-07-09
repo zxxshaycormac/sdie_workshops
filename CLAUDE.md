@@ -213,6 +213,7 @@ A change is not Done until all of the following hold:
 - [ ] `make generate-swagger` regenerated if API changed
 - [ ] Migration + fixtures updated if DB schema changed
 - [ ] Acceptance criteria from (S)pec verified
+- [ ] Changed displayed/serialized values verified across the entire presentation layer — every consumer that renders or serializes the value checked for correct, distinct handling, not assumed "handled" from a summary or verified at a single surface
 
 ### Cross-stage Validation
 
