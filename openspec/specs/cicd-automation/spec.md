@@ -24,7 +24,7 @@ Baseline specification of Gitea's CI/CD, webhook, and server-side automation sub
 - **CICD-01-101:** `When a trigger event matches a workflow's on clause, the system shall create a new workflow run.`
 - **CICD-01-102:** `When a workflow run is created, the system shall evaluate job dependencies and schedule jobs for execution.`
 - **CICD-01-103:** `When a job is assigned to a runner, the system shall execute steps sequentially within that job.`
-- **CICD-01-104:** `When a workflow run completes, the system shall update the run status to success or failure based on job outcomes.`
+- **CICD-01-104:** `When a workflow run completes (all jobs in a terminal state), the system shall set the run status to the most severe job outcome with precedence: failure if any job failed, otherwise cancelled if any job was cancelled, otherwise success if any job succeeded, otherwise skipped.`
 - **CICD-01-105:** `When a user cancels a workflow run via the API, the system shall cancel all running and pending jobs in that run.`
 - **CICD-01-106:** `When a user reruns a workflow via the API, the system shall create a new run with the same workflow definition and trigger event.`
 - **CICD-01-107:** `When a workflow step references an action (uses:), the system shall resolve the action from the configured DEFAULT_ACTIONS_URL (GitHub or self-hosted).`
@@ -35,6 +35,10 @@ Baseline specification of Gitea's CI/CD, webhook, and server-side automation sub
 - **CICD-01-702:** `While a runner is in offline state, the system shall not assign new jobs to that runner.`
 - **CICD-01-703:** `While a task exceeds the configured ZOMBIE_TASK_TIMEOUT (default 10 minutes), the system shall mark the task as timed out.`
 - **CICD-01-704:** `While a task exceeds the configured ENDLESS_TASK_TIMEOUT (default 3 hours), the system shall stop the task.`
+
+### State-Driven Requirements (Run Status)
+
+- **CICD-01-705:** `While a workflow run has any non-terminal job, the system shall set the run status with precedence: running if any job is running, otherwise blocked if any job is blocked (awaiting environment approval or unmet job needs), otherwise waiting.`
 
 ### Optional Feature Requirements (Actions Configuration)
 
@@ -349,6 +353,14 @@ Workflow run logs use a dedicated storage type, configured under `[actions_log]`
 | Git hook script with syntax error | Script saved but error logged on execution failure |
 | Git hooks modified by non-admin | Operation denied |
 | Abandoned job exceeds timeout | Cancelled by cron abandoned job cleanup (default 24 hours; see Domain 08) |
+| All jobs skipped (e.g. all if: conditions false) | Run status is skipped (not success) |
+| A job is cancelled and no job failed | Run status is cancelled (not failure) |
+| A failed job caused dependent jobs to be cancelled | Run status is failure (failure dominates cancelled) |
+| All jobs blocked awaiting approval | Run status is blocked (not running) |
+| Mix of blocked and waiting jobs | Run status is blocked |
+| Mix of running and blocked jobs | Run status is running |
+| Job in unknown (zero-value) non-terminal state | Run falls back to running |
+| Empty job set (degenerate) | Run status is skipped |
 
 ## Success Criteria
 
