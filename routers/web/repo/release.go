@@ -212,9 +212,14 @@ func TagsList(ctx *context.Context) {
 	ctx.Data["HideBranchesInDropdown"] = true
 	ctx.Data["CanCreateRelease"] = ctx.Repo.CanWrite(unit.TypeReleases) && !ctx.Repo.Repository.IsArchived
 
+	requestedPageSize := ctx.FormInt("limit")
+	page := ctx.FormInt("page")
+	if page <= 1 {
+		page = 1
+	}
 	listOptions := db.ListOptions{
-		Page:     ctx.FormInt("page"),
-		PageSize: ctx.FormInt("limit"),
+		Page:     page,
+		PageSize: requestedPageSize,
 	}
 	if listOptions.PageSize == 0 {
 		listOptions.PageSize = setting.Repository.Release.DefaultPagingNum
@@ -222,9 +227,11 @@ func TagsList(ctx *context.Context) {
 	if listOptions.PageSize > setting.API.MaxResponseItems {
 		listOptions.PageSize = setting.API.MaxResponseItems
 	}
+	keyword := ctx.FormTrim("q")
 
 	opts := repo_model.FindReleasesOptions{
-		ListOptions: listOptions,
+		ListOptions:    listOptions,
+		TagNameKeyword: keyword,
 		// for the tags list page, show all releases with real tags (having real commit-id),
 		// the drafts should also be included because a real tag might be used as a draft.
 		IncludeDrafts: true,
@@ -233,17 +240,20 @@ func TagsList(ctx *context.Context) {
 		RepoID:        ctx.Repo.Repository.ID,
 	}
 
-	releases, err := db.Find[repo_model.Release](ctx, opts)
+	releases, filteredCount, err := db.FindAndCount[repo_model.Release](ctx, opts)
 	if err != nil {
 		ctx.ServerError("GetReleasesByRepoID", err)
 		return
 	}
 
 	ctx.Data["Releases"] = releases
+	ctx.Data["Keyword"] = keyword
 
-	numTags := ctx.Data["NumTags"].(int64)
-	pager := context.NewPagination(int(numTags), opts.PageSize, opts.Page, 5)
+	pager := context.NewPagination(int(filteredCount), opts.PageSize, opts.Page, 5)
 	pager.SetDefaultParams(ctx)
+	if requestedPageSize > 0 {
+		pager.AddParamString("limit", fmt.Sprint(opts.PageSize))
+	}
 	ctx.Data["Page"] = pager
 
 	ctx.Data["PageIsViewCode"] = !ctx.Repo.Repository.UnitEnabled(ctx, unit.TypeReleases)

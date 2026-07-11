@@ -228,13 +228,14 @@ func GetReleaseForRepoByID(ctx context.Context, repoID, id int64) (*Release, err
 // FindReleasesOptions describes the conditions to Find releases
 type FindReleasesOptions struct {
 	db.ListOptions
-	RepoID        int64
-	IncludeDrafts bool
-	IncludeTags   bool
-	IsPreRelease  optional.Option[bool]
-	IsDraft       optional.Option[bool]
-	TagNames      []string
-	HasSha1       optional.Option[bool] // useful to find draft releases which are created with existing tags
+	RepoID         int64
+	IncludeDrafts  bool
+	IncludeTags    bool
+	IsPreRelease   optional.Option[bool]
+	IsDraft        optional.Option[bool]
+	TagNames       []string
+	TagNameKeyword string
+	HasSha1        optional.Option[bool] // useful to find draft releases which are created with existing tags
 }
 
 func (opts FindReleasesOptions) ToConds() builder.Cond {
@@ -248,6 +249,9 @@ func (opts FindReleasesOptions) ToConds() builder.Cond {
 	}
 	if len(opts.TagNames) > 0 {
 		cond = cond.And(builder.In("tag_name", opts.TagNames))
+	}
+	if opts.TagNameKeyword != "" {
+		cond = cond.And(db.BuildCaseInsensitiveLike("tag_name", opts.TagNameKeyword))
 	}
 	if opts.IsPreRelease.Has() {
 		cond = cond.And(builder.Eq{"is_prerelease": opts.IsPreRelease.Value()})

@@ -1,0 +1,38 @@
+schema: spec-driven
+
+context: |
+  Product: Gitea, a self-hosted Git service.
+  Repository shape: Go 1.22 monolith with Chi-style routing, XORM models,
+  service orchestration, Go templates, Vue 3/JavaScript, and generated assets.
+  Runtime entry: main.go -> cmd -> routers. Request work usually flows through
+  routers -> services -> models/modules. API contracts live in modules/structs
+  and Swagger annotations/templates.
+  Frontend source lives in web_src and templates. public/assets and bindata Go
+  files are generated outputs and must not be edited directly.
+  Tests: Go package tests, Vitest frontend tests, Playwright end-to-end tests,
+  and multi-database integration suites. Select checks in proportion to the
+  affected surface; do not claim a full check when only a narrow one ran.
+  Local runtime state under custom/conf, data, log, node_modules, and the gitea
+  binary is not source and may contain secrets. Do not read or edit it unless a
+  task explicitly targets runtime diagnosis.
+  The current workspace may not have Git metadata. State that limitation when
+  diff history, blame, or rollback guarantees would otherwise be assumed.
+  Read AGENTS.md and docs/engineering/PROJECT_MAP.md before implementation.
+
+rules:
+  proposal:
+    - Include explicit Non-goals.
+    - Name the affected layers and compatibility surface.
+    - Separate observed facts from assumptions that still need verification.
+  specs:
+    - Use SHALL or MUST for normative requirements.
+    - Give every requirement at least one Given/When/Then scenario.
+    - Cover failure, authorization, or compatibility behavior when applicable.
+  design:
+    - Trace each requirement to concrete control points in the repository.
+    - Document rejected alternatives, risks, rollback, and verification scope.
+    - Call out generated artifacts and cross-layer synchronization explicitly.
+  tasks:
+    - Keep tasks ordered, bounded, and independently verifiable.
+    - Put focused tests next to the implementation task that requires them.
+    - End with OpenSpec strict validation and the selected project checks.

@@ -18,6 +18,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createNewRelease(t *testing.T, session *TestSession, repoURL, tag, title string, preRelease, draft bool) {
@@ -225,19 +226,76 @@ func TestViewTagsList(t *testing.T) {
 	link := repo.Link() + "/tags"
 
 	session := loginUser(t, "user1")
-	req := NewRequest(t, "GET", link)
-	rsp := session.MakeRequest(t, req, http.StatusOK)
 
-	htmlDoc := NewHTMLParser(t, rsp.Body)
-	tags := htmlDoc.Find(".tag-list-row-link")
-	assert.Equal(t, 3, tags.Length())
+	requestTags := func(t *testing.T, query string) *HTMLDoc {
+		t.Helper()
+		req := NewRequest(t, "GET", link+query)
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		return NewHTMLParser(t, rsp.Body)
+	}
 
-	tagNames := make([]string, 0, 5)
-	tags.Each(func(i int, s *goquery.Selection) {
-		tagNames = append(tagNames, s.Text())
+	tagNames := func(htmlDoc *HTMLDoc) []string {
+		names := make([]string, 0, 5)
+		htmlDoc.Find(".tag-list-row-link").Each(func(_ int, s *goquery.Selection) {
+			names = append(names, s.Text())
+		})
+		return names
+	}
+
+	t.Run("unfiltered", func(t *testing.T) {
+		htmlDoc := requestTags(t, "")
+		assert.EqualValues(t, []string{"v1.0", "delete-tag", "v1.1"}, tagNames(htmlDoc))
+		assert.Equal(t, 1, htmlDoc.Find(`input[name="q"]`).Length())
 	})
 
-	assert.EqualValues(t, []string{"v1.0", "delete-tag", "v1.1"}, tagNames)
+	t.Run("whitespace keyword is unfiltered", func(t *testing.T) {
+		htmlDoc := requestTags(t, "?q=%20%20")
+		assert.EqualValues(t, []string{"v1.0", "delete-tag", "v1.1"}, tagNames(htmlDoc))
+	})
+
+	t.Run("partial case insensitive match", func(t *testing.T) {
+		htmlDoc := requestTags(t, "?q=V1")
+		assert.EqualValues(t, []string{"v1.0", "v1.1"}, tagNames(htmlDoc))
+		value, exists := htmlDoc.Find(`input[name="q"]`).Attr("value")
+		assert.True(t, exists)
+		assert.Equal(t, "V1", value)
+		assert.Contains(t, htmlDoc.Find(`.small-menu-items a[href$="/tags"]`).Text(), "3 Tags")
+		assert.Equal(t, 0, htmlDoc.Find(".delete-button").Length())
+	})
+
+	t.Run("only tag names participate", func(t *testing.T) {
+		htmlDoc := requestTags(t, "?q=testing-release")
+		assert.Empty(t, tagNames(htmlDoc))
+		assert.Equal(t, 1, htmlDoc.Find(".tag-list-no-results").Length())
+	})
+
+	t.Run("no results retains keyword", func(t *testing.T) {
+		htmlDoc := requestTags(t, "?q=does-not-exist")
+		assert.Empty(t, tagNames(htmlDoc))
+		assert.Equal(t, 1, htmlDoc.Find(".tag-list-no-results").Length())
+		value, exists := htmlDoc.Find(`input[name="q"]`).Attr("value")
+		assert.True(t, exists)
+		assert.Equal(t, "does-not-exist", value)
+		assert.Equal(t, 0, htmlDoc.Find(".pagination").Length())
+	})
+
+	t.Run("pagination retains keyword", func(t *testing.T) {
+		htmlDoc := requestTags(t, "?q=v1&limit=1")
+		assert.Len(t, tagNames(htmlDoc), 1)
+		nextPage, exists := htmlDoc.Find(`.pagination a[href*="page=2"]`).First().Attr("href")
+		require.True(t, exists)
+		require.Contains(t, nextPage, "q=v1")
+		require.Contains(t, nextPage, "limit=1")
+
+		req := NewRequest(t, "GET", nextPage)
+		rsp := session.MakeRequest(t, req, http.StatusOK)
+		htmlDoc = NewHTMLParser(t, rsp.Body)
+		assert.Len(t, tagNames(htmlDoc), 1)
+		assert.NotEqual(t, "delete-tag", tagNames(htmlDoc)[0])
+		value, exists := htmlDoc.Find(`input[name="q"]`).Attr("value")
+		assert.True(t, exists)
+		assert.Equal(t, "v1", value)
+	})
 }
 
 func TestDownloadReleaseAttachment(t *testing.T) {

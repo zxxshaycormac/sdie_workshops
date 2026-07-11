@@ -25,3 +25,35 @@ func TestMigrate_InsertReleases(t *testing.T) {
 	err := InsertReleases(db.DefaultContext, r)
 	assert.NoError(t, err)
 }
+
+func TestFindReleasesByTagNameKeyword(t *testing.T) {
+	assert.NoError(t, unittest.PrepareTestDatabase())
+
+	releases, err := db.Find[Release](db.DefaultContext, FindReleasesOptions{
+		ListOptions:    db.ListOptionsAll,
+		RepoID:         1,
+		IncludeDrafts:  true,
+		IncludeTags:    true,
+		TagNameKeyword: "V1",
+	})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"v1.0", "v1.1"}, releaseTagNames(releases))
+
+	releases, err = db.Find[Release](db.DefaultContext, FindReleasesOptions{
+		ListOptions:    db.ListOptionsAll,
+		RepoID:         1,
+		IncludeDrafts:  true,
+		IncludeTags:    true,
+		TagNameKeyword: "testing-release",
+	})
+	assert.NoError(t, err)
+	assert.Empty(t, releases, "release titles must not participate in tag-name search")
+}
+
+func releaseTagNames(releases []*Release) []string {
+	names := make([]string, 0, len(releases))
+	for _, release := range releases {
+		names = append(names, release.TagName)
+	}
+	return names
+}
