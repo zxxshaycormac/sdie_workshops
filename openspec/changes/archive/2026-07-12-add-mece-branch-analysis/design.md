@@ -8,9 +8,9 @@ authorization, state, boundary, side-effect, or failure branches.
 
 ## Decisions
 
-### 1. Define MEMC locally as practical branch analysis
+### 1. Define MECE locally as practical branch analysis
 
-In this harness, MEMC means splitting the relevant behavior space into
+In this harness, MECE means splitting the relevant behavior space into
 mutually exclusive categories and making the list maximally complete for the
 current contract. This is intentionally bounded by OpenSpec scope and explicit
 non-goals, so it does not demand tests for impossible or irrelevant states.
@@ -18,12 +18,12 @@ non-goals, so it does not demand tests for impossible or irrelevant states.
 ### 2. Put operational detail in the TDD workflow
 
 `docs/engineering/TDD_WORKFLOW.md` is where future agents decide which tests a
-subagent should write before implementation. The MEMC checklist belongs there
+subagent should write before implementation. The MECE checklist belongs there
 because it directly shapes test design.
 
 ### 3. Link OpenSpec, API, and verification guidance
 
-OpenSpec scenarios should be reviewed against the MEMC branch list. API tests
+OpenSpec scenarios should be reviewed against the MECE branch list. API tests
 should use it to select success, failure, boundary, authorization, and
 side-effect coverage. Final reports should state which important branches were
 covered and which were intentionally left out.

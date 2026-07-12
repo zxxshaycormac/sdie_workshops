@@ -9,7 +9,7 @@ reads/writes, and calls to downstream services or infrastructure.
 API behavior changes follow the repository TDD workflow in
 `docs/engineering/TDD_WORKFLOW.md`: write or review the focused API tests before
 production code changes, run them to observe the expected failure when
-practical, then implement the smallest change that makes them pass. Use MEMC
+practical, then implement the smallest change that makes them pass. Use MECE
 branch analysis to decide which route, input, permission, state, failure, and
 side-effect branches belong in focused API coverage.
 
@@ -57,7 +57,7 @@ product or compatibility defects when tests expose them. Only update old
 expectations when they no longer represent the correct behavior. Do not delete
 assertions, skip tests, or reduce coverage merely to make the suite pass.
 
-The final report MUST list every added or updated API test, the important MEMC
+The final report MUST list every added or updated API test, the important MECE
 branches covered, the expected failing evidence before implementation or why it
 was not practical, the exact commands run after implementation, their results,
 and any related tests not run with the reason and residual risk.

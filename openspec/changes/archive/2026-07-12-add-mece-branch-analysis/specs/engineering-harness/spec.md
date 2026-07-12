@@ -1,8 +1,8 @@
 ## ADDED Requirements
 
-### Requirement: MEMC branch analysis
+### Requirement: MECE branch analysis
 
-The repository SHALL require behavior and contract changes to use MEMC-style
+The repository SHALL require behavior and contract changes to use MECE-style
 branch analysis before implementation and test selection.
 
 #### Scenario: Contributor designs behavior coverage
@@ -17,13 +17,13 @@ branch analysis before implementation and test selection.
 
 - **GIVEN** a possible branch is impossible, unreachable, or outside the stated
   OpenSpec non-goals
-- **WHEN** the contributor applies MEMC branch analysis
+- **WHEN** the contributor applies MECE branch analysis
 - **THEN** they record the exclusion instead of silently ignoring it or writing
   speculative tests
 
 #### Scenario: Completion evidence is reported
 
-- **GIVEN** MEMC branch analysis shaped test selection
+- **GIVEN** MECE branch analysis shaped test selection
 - **WHEN** the contributor reports completion
 - **THEN** the report identifies covered important branches and any intentionally
   skipped branches with residual risk

@@ -11,7 +11,7 @@ contract changed.
 1. Trace the control path before writing tests: route, context, handler, service,
    model, module, template, frontend entry, queue, or external boundary.
 2. Capture the intended behavior in OpenSpec scenarios for non-trivial changes.
-3. Build a MEMC branch list for the relevant behavior space before selecting
+3. Build a MECE branch list for the relevant behavior space before selecting
    tests.
 4. Ask an independent subagent to write or review the focused tests first when
    subagent support is available.
@@ -23,14 +23,14 @@ contract changed.
 8. Refactor only while the focused tests stay green, and update OpenSpec tasks
    with the evidence.
 
-## MEMC Branch Analysis
+## MECE Branch Analysis
 
-In this repository, MEMC means splitting the relevant behavior space into
+In this repository, MECE means splitting the relevant behavior space into
 mutually exclusive categories and making the list maximally complete for the
 current contract. It is bounded by the OpenSpec scope: impossible, unreachable,
 or non-goal branches should be named as exclusions instead of silently ignored.
 
-Use MEMC analysis before asking for tests. Consider at least these branch
+Use MECE analysis before asking for tests. Consider at least these branch
 families when they apply:
 
 - actor, permission, ownership, and authentication state;
@@ -48,7 +48,7 @@ and that intentionally skipped branches have a reason and residual risk.
 ## Subagent Role
 
 The test subagent owns the test perspective, not the product implementation. It
-should derive cases from OpenSpec scenarios, MEMC branch analysis, and traced
+should derive cases from OpenSpec scenarios, MECE branch analysis, and traced
 control points; inspect neighboring test patterns; and cover meaningful success,
 failure, boundary, authorization, ordering, and side-effect behavior for the
 change.
@@ -62,7 +62,7 @@ review the failing test first and report that the subagent step was unavailable.
 Final reports for behavior changes must include:
 
 - the test or review that was created before production code;
-- the important MEMC branches covered by that test or review;
+- the important MECE branches covered by that test or review;
 - the pre-implementation failing command and failure reason, when practical;
 - the post-implementation passing command;
 - any broader verification that was intentionally skipped, with residual risk.

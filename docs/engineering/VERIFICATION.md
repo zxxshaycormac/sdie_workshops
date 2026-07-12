@@ -27,7 +27,7 @@ reported as evidence for an unrelated surface.
 
 For behavior and contract changes, select the focused test before production
 code changes, run it once for expected failure when practical, and rerun the
-same scope after implementation. Use MEMC branch analysis to identify the
+same scope after implementation. Use MECE branch analysis to identify the
 important states, failures, permissions, boundaries, and side effects that the
 focused checks must cover. See `docs/engineering/TDD_WORKFLOW.md`.
 
@@ -120,7 +120,7 @@ A completion report must distinguish:
 ```text
 Test-first:
 - Added tests/api_tags_search_test.go before product code.
-- MEMC branches covered: partial match, case-insensitive match, title non-match,
+- MECE branches covered: partial match, case-insensitive match, title non-match,
   pagination query preservation, empty result.
 - Pre-implementation run failed as expected: missing tag query filtering.
 

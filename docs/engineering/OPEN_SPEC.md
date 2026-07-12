@@ -109,7 +109,7 @@ Check especially:
 
 - Does each requirement use SHALL or MUST?
 - Does every requirement have a `#### Scenario`?
-- Do scenarios reflect MEMC branch analysis: mutually exclusive categories,
+- Do scenarios reflect MECE branch analysis: mutually exclusive categories,
   important edge paths, and explicit exclusions?
 - Are authorization, failure, compatibility, and side effects covered?
 - Does the design name concrete paths from `PROJECT_MAP.md`?

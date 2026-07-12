@@ -5,17 +5,17 @@ test design thinking explicit. Tests written first are only useful when they
 come from a disciplined model of the behavior space rather than from the most
 obvious happy path.
 
-This change adds MEMC-style branch analysis to the engineering harness: split
+This change adds MECE-style branch analysis to the engineering harness: split
 possibilities into mutually exclusive buckets, make the set as exhaustive as the
 current contract reasonably allows, and explicitly name excluded or unreachable
 branches.
 
 ## What Changes
 
-- Add MEMC branch analysis guidance to the TDD workflow.
+- Add MECE branch analysis guidance to the TDD workflow.
 - Require OpenSpec designs and scenarios to consider relevant state, permission,
   input, data, downstream, timing, and UI/API output branches.
-- Tie MEMC output to subagent test design and final evidence.
+- Tie MECE output to subagent test design and final evidence.
 - Keep root `AGENTS.md` concise by linking to detailed guidance.
 
 ### Non-goals
@@ -29,5 +29,5 @@ branches.
 
 ### Modified Capabilities
 
-- `engineering-harness`: Document MEMC-style branch analysis as part of
+- `engineering-harness`: Document MECE-style branch analysis as part of
   OpenSpec, TDD, and verification planning.
