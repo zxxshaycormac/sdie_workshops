@@ -9,7 +9,9 @@ reads/writes, and calls to downstream services or infrastructure.
 API behavior changes follow the repository TDD workflow in
 `docs/engineering/TDD_WORKFLOW.md`: write or review the focused API tests before
 production code changes, run them to observe the expected failure when
-practical, then implement the smallest change that makes them pass.
+practical, then implement the smallest change that makes them pass. Use MEMC
+branch analysis to decide which route, input, permission, state, failure, and
+side-effect branches belong in focused API coverage.
 
 Frontend and backend changes share this same API contract. Backend source owns
 the authoritative route, request/response structs, validation, status behavior,
@@ -55,7 +57,7 @@ product or compatibility defects when tests expose them. Only update old
 expectations when they no longer represent the correct behavior. Do not delete
 assertions, skip tests, or reduce coverage merely to make the suite pass.
 
-The final report MUST list every added or updated API test, the expected failing
-evidence before implementation or why it was not practical, the exact commands
-run after implementation, their results, and any related tests not run with the
-reason and residual risk.
+The final report MUST list every added or updated API test, the important MEMC
+branches covered, the expected failing evidence before implementation or why it
+was not practical, the exact commands run after implementation, their results,
+and any related tests not run with the reason and residual risk.

@@ -9,7 +9,7 @@
 2. 运行 `openspec list`，检查是否已有相关变更。
 3. 非简单变更先创建或更新 OpenSpec，再改代码。
 4. 编辑前追踪完整行为路径，记录路由、上下文、service、model、模板或前端入口。
-5. 行为变更按 `docs/engineering/TDD_WORKFLOW.md` 先让子 agent 写或审测试。
+5. 行为变更按 MEMC 分支分析和 `docs/engineering/TDD_WORKFLOW.md` 先让子 agent 写或审测试。
 6. 编码前按 `docs/engineering/VERIFICATION.md` 选择验证方式。
 7. 实现最小完整变更，同步更新 OpenSpec tasks。
 8. 报告修改内容、检查结果、未执行检查和残余风险。
@@ -39,7 +39,8 @@ OpenSpec 工作流见 `docs/engineering/OPEN_SPEC.md`。
 - 持久化：模型注册 -> 查询/事务 -> 迁移和多数据库行为 -> 调用方。
 - 异步：生产者 -> 队列/任务载荷 -> 消费者 -> 重试/超时 -> 最终状态和通知。
 
-跨层变更必须在 OpenSpec design 中记录这些控制点。
+跨层变更必须在 OpenSpec design 中记录这些控制点，并用 MEMC 思维拆分关键分支：
+互斥分类、尽量穷尽、明确非目标和不可达分支。
 
 ## 一级目录路线图
 
@@ -99,6 +100,7 @@ OpenSpec 工作流见 `docs/engineering/OPEN_SPEC.md`。
 - 默认保持 API 兼容。API 变化必须同步注解、`modules/structs`、Swagger 引用和测试。
 - HTTP API 测试细则见 `docs/engineering/API_TESTS.md`。
 - 行为和契约变更先走 `docs/engineering/TDD_WORKFLOW.md` 的测试先行流程。
+- 测试设计必须覆盖 MEMC 分支分析中的关键状态、失败、权限、边界和副作用。
 - 模型变化必须处理注册、迁移、事务边界和受支持数据库。
 - 模板变化必须检查 handler 数据和前端初始化器；不要修改生成资源。
 - 用户行为变化时，必须在同一变更中新增或更新文档。
@@ -132,6 +134,7 @@ make build
 
 - 行为和非目标与 proposal/specs 一致。
 - 行为变更已有测试先行证据，或说明为何不适用。
+- 关键 MEMC 分支已有覆盖或明确残余风险。
 - OpenSpec tasks 已勾选，并有实现或验证证据。
 - 变化的控制点和公开契约已同步。
 - 相关聚焦测试通过；共享或高风险变更按需执行更广检查。
