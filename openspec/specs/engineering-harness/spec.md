@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the repository-level operating model that makes human and AI changes code-grounded, bounded by explicit contracts, and supported by proportionate verification evidence.
-
 ## Requirements
-
 ### Requirement: Repository operating instructions
 
 The repository SHALL provide a root-level instruction surface that tells human and AI contributors how to orient, plan, implement, verify, and report a change.
@@ -85,3 +83,55 @@ The repository SHALL document how to explore, propose, apply, validate, and arch
 - **GIVEN** a user has an idea but no active change
 - **WHEN** they follow the documented workflow
 - **THEN** they can create complete artifacts, implement tasks, strictly validate the result, and archive it into the main specification
+
+### Requirement: Directory roadmap guidance
+
+The repository SHALL provide a concise roadmap document inside every Git-tracked
+first-level source directory.
+
+#### Scenario: Contributor enters a first-level directory
+
+- **GIVEN** a contributor opens a Git-tracked first-level directory
+- **WHEN** they look for local orientation
+- **THEN** the directory contains a `ROADMAP.md` describing its purpose,
+  control paths, expected edits, verification signals, and boundaries
+
+#### Scenario: Contributor sees a runtime-only directory
+
+- **GIVEN** a first-level directory is untracked local runtime state,
+  dependencies, Git metadata, or generated evidence
+- **WHEN** the contributor follows the harness
+- **THEN** the root instructions and project map identify it as outside normal
+  source edits instead of requiring a local roadmap
+
+### Requirement: Root instructions remain concise
+
+The repository SHALL keep the root operating instructions short enough to scan
+and SHALL link to detailed supporting documents for deeper rules.
+
+#### Scenario: Root instructions list directory roadmaps
+
+- **GIVEN** directory-local roadmaps exist
+- **WHEN** a contributor reads `AGENTS.md`
+- **THEN** it links to the roadmaps and stays below 200 lines
+
+#### Scenario: Detailed API test guidance is needed
+
+- **GIVEN** a contributor changes HTTP API behavior
+- **WHEN** they read `AGENTS.md`
+- **THEN** it points them to the detailed API testing contract instead of
+  embedding the full contract inline
+
+### Requirement: Frontend API contract guidance
+
+The repository SHALL document how frontend code participates in shared backend
+and frontend API contracts.
+
+#### Scenario: Frontend consumes changed API behavior
+
+- **GIVEN** a frontend change depends on an API field, status, error shape,
+  permission, ordering, or side effect
+- **WHEN** the contributor follows the frontend API contract guidance
+- **THEN** they can identify the backend source of truth, the frontend consumer,
+  the generated output boundary, and the required backend and frontend
+  verification evidence

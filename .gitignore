@@ -54,6 +54,7 @@ cpu.out
 /bin
 /dist
 /custom/*
+!/custom/ROADMAP.md
 !/custom/conf/app.example.ini
 /data
 /indexers

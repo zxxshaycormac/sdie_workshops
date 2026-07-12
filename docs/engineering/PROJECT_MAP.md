@@ -183,9 +183,10 @@ Never paste credentials or tokens into OpenSpec artifacts or completion reports.
 
 Use `docs/engineering/VERIFICATION.md` to choose commands before editing.
 
-## Known Workspace Constraint
+## Git Metadata
 
-There is no `.git` directory in this workspace. Source history, upstream delta,
-blame, clean-tree checks, and Git-based generator verification are unavailable.
-Restore the intended history or initialize version control before relying on
-those feedback loops.
+This workspace normally has Git metadata restored. Use Git status, diffs, and
+history when they are available, but do not assume they exist in every exported
+or unpacked copy of the project. If `.git` is missing, state that limitation
+before relying on blame, upstream delta, clean-tree checks, or Git-based
+generator verification.
