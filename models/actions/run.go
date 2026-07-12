@@ -276,20 +276,12 @@ func InsertRun(ctx context.Context, run *ActionRun, jobs []*jobparser.SingleWork
 	run.Index = index
 	run.Title, _ = util.SplitStringAtByteN(run.Title, 255)
 
-	if err := db.Insert(ctx, run); err != nil {
-		return err
-	}
-
 	if run.Repo == nil {
 		repo, err := repo_model.GetRepositoryByID(ctx, run.RepoID)
 		if err != nil {
 			return err
 		}
 		run.Repo = repo
-	}
-
-	if err := updateRepoRunsNumbers(ctx, run.Repo); err != nil {
-		return err
 	}
 
 	runJobs := make([]*ActionRunJob, 0, len(jobs))
@@ -322,7 +314,20 @@ func InsertRun(ctx context.Context, run *ActionRun, jobs []*jobparser.SingleWork
 			Status:            status,
 		})
 	}
+	run.Status = aggregateJobStatus(runJobs)
+
+	if err := db.Insert(ctx, run); err != nil {
+		return err
+	}
+
+	for _, runJob := range runJobs {
+		runJob.RunID = run.ID
+	}
 	if err := db.Insert(ctx, runJobs); err != nil {
+		return err
+	}
+
+	if err := updateRepoRunsNumbers(ctx, run.Repo); err != nil {
 		return err
 	}
 
