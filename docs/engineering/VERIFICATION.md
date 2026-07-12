@@ -25,6 +25,10 @@ reported as evidence for an unrelated surface.
 
 ## Change-To-Check Matrix
 
+For behavior and contract changes, select the focused test before production
+code changes, run it once for expected failure when practical, and rerun the
+same scope after implementation. See `docs/engineering/TDD_WORKFLOW.md`.
+
 | Change surface | Minimum focused evidence | Broaden when |
 | --- | --- | --- |
 | OpenSpec or harness docs | `verify.sh harness` | Shared rules or tooling changed |
@@ -51,8 +55,8 @@ make lint-md            # Markdown lint
 make build              # frontend and backend build
 ```
 
-Some Make checks use `git diff` or `git status`. They cannot provide their
-intended clean-tree evidence while this workspace lacks `.git` metadata.
+Some Make checks use `git diff` or `git status`. They require available `.git`
+metadata to provide their intended clean-tree evidence.
 
 ## API And Swagger
 
@@ -72,7 +76,7 @@ make lint-swagger
 make swagger-validate
 ```
 
-`make swagger-check` compares output with Git and therefore needs restored Git
+`make swagger-check` compares output with Git and therefore needs available Git
 metadata to work as designed.
 
 ## Database And Integration Checks
@@ -112,6 +116,10 @@ replacement for focused unit or package tests.
 A completion report must distinguish:
 
 ```text
+Test-first:
+- Added tests/api_tags_search_test.go before product code.
+- Pre-implementation run failed as expected: missing tag query filtering.
+
 Passed:
 - ./tools/harness/verify.sh spec
 - ./tools/harness/verify.sh go ./services/repository/...

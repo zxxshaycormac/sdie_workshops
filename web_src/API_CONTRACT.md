@@ -20,7 +20,9 @@ frontend assets are produced.
 
 When one side changes, trace both sides before implementation. A frontend change
 that assumes a new field, status, error shape, permission, or ordering must point
-to the backend source of truth and the test that proves it.
+to the backend source of truth and the test that proves it. For behavior
+changes, follow `docs/engineering/TDD_WORKFLOW.md` and write or review the
+frontend consumption test before production code changes when practical.
 
 ## Frontend Route Map
 
@@ -30,7 +32,7 @@ to the backend source of truth and the test that proves it.
 4. Trace the backend route, handler, `modules/structs` type, service, and model.
 5. Check whether Swagger or docs need regeneration.
 6. Add or update frontend tests for browser behavior and backend API tests for
-   the contract itself.
+   the contract itself before implementation when the behavior is changing.
 
 ## Generated Output Boundary
 

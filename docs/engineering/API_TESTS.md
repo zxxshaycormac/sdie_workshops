@@ -6,6 +6,11 @@ types in `modules/structs`, binding or validation, status codes, response
 fields, authentication or middleware, business state transitions, database
 reads/writes, and calls to downstream services or infrastructure.
 
+API behavior changes follow the repository TDD workflow in
+`docs/engineering/TDD_WORKFLOW.md`: write or review the focused API tests before
+production code changes, run them to observe the expected failure when
+practical, then implement the smallest change that makes them pass.
+
 Frontend and backend changes share this same API contract. Backend source owns
 the authoritative route, request/response structs, validation, status behavior,
 and Swagger source. Frontend source under `web_src/` owns browser consumption of
@@ -40,16 +45,17 @@ part of the public contract, verify it through an integration flow rather than
 only an isolated handler call.
 
 When business logic and API tests both change, use an independent subagent for
-API test implementation or review when that capability is available. If it is
-not available, the final report MUST include an independent review checklist for
-route reachability, status codes, response body assertions, authorization,
-fixtures, side effects, and cleanup.
+API test implementation or review before product code changes when that
+capability is available. If it is not available, the final report MUST include
+an independent review checklist for route reachability, status codes, response
+body assertions, authorization, fixtures, side effects, and cleanup.
 
 After implementation, run the affected API tests and diagnose failures. Fix
 product or compatibility defects when tests expose them. Only update old
 expectations when they no longer represent the correct behavior. Do not delete
 assertions, skip tests, or reduce coverage merely to make the suite pass.
 
-The final report MUST list every added or updated API test, the exact commands
-run, their results, and any related tests not run with the reason and residual
-risk.
+The final report MUST list every added or updated API test, the expected failing
+evidence before implementation or why it was not practical, the exact commands
+run after implementation, their results, and any related tests not run with the
+reason and residual risk.

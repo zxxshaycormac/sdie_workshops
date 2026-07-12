@@ -9,9 +9,10 @@
 2. 运行 `openspec list`，检查是否已有相关变更。
 3. 非简单变更先创建或更新 OpenSpec，再改代码。
 4. 编辑前追踪完整行为路径，记录路由、上下文、service、model、模板或前端入口。
-5. 编码前按 `docs/engineering/VERIFICATION.md` 选择验证方式。
-6. 实现最小完整变更，同步更新 OpenSpec tasks。
-7. 报告修改内容、检查结果、未执行检查和残余风险。
+5. 行为变更按 `docs/engineering/TDD_WORKFLOW.md` 先让子 agent 写或审测试。
+6. 编码前按 `docs/engineering/VERIFICATION.md` 选择验证方式。
+7. 实现最小完整变更，同步更新 OpenSpec tasks。
+8. 报告修改内容、检查结果、未执行检查和残余风险。
 
 OpenSpec 工作流见 `docs/engineering/OPEN_SPEC.md`。
 
@@ -97,6 +98,7 @@ OpenSpec 工作流见 `docs/engineering/OPEN_SPEC.md`。
   `modules`。
 - 默认保持 API 兼容。API 变化必须同步注解、`modules/structs`、Swagger 引用和测试。
 - HTTP API 测试细则见 `docs/engineering/API_TESTS.md`。
+- 行为和契约变更先走 `docs/engineering/TDD_WORKFLOW.md` 的测试先行流程。
 - 模型变化必须处理注册、迁移、事务边界和受支持数据库。
 - 模板变化必须检查 handler 数据和前端初始化器；不要修改生成资源。
 - 用户行为变化时，必须在同一变更中新增或更新文档。
@@ -129,6 +131,7 @@ make build
 ## 完成定义
 
 - 行为和非目标与 proposal/specs 一致。
+- 行为变更已有测试先行证据，或说明为何不适用。
 - OpenSpec tasks 已勾选，并有实现或验证证据。
 - 变化的控制点和公开契约已同步。
 - 相关聚焦测试通过；共享或高风险变更按需执行更广检查。

@@ -10,7 +10,7 @@ engineering harness guides.
 - `content/`: localized product documentation.
 - `static/`: images and static files referenced by docs.
 - `engineering/`: repository operating model, OpenSpec guidance, project map,
-  verification, and API testing contract.
+  TDD-first workflow, verification, and API testing contract.
 - `README*.md`: docs build and language entry points.
 
 ## When To Edit
